@@ -12,6 +12,33 @@ No guarantees are provided here. If you wanna use it, go for it, but do know tha
 2. `pip install spendee`
 3. Enjoy.
 
+## Development setup
+
+To set up a development environment:
+
+1. Ensure you have Python 3.7+ installed.
+2. Create a virtual environment:
+    ```bash
+    python3 -m venv .venv
+    ```
+3. Activate the virtual environment:
+    - On Linux/macOS:
+      ```bash
+      source .venv/bin/activate
+      ```
+    - On Windows:
+      ```cmd
+      .venv\Scripts\activate
+      ```
+4. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+5. Install the package in editable (dev) mode:
+    ```bash
+    pip install -e .
+    ```
+
 ## Future Improvements
 
 - finish up all the endpoints [24/73]

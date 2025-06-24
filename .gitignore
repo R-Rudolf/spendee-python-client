@@ -1,3 +1,7 @@
 .idea
 __pycache__
 *.pyc
+# Ignore .env files containing secrets
+.env
+.venv
+*.egg-info
