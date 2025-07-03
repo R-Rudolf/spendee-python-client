@@ -17,25 +17,15 @@ No guarantees are provided here. If you wanna use it, go for it, but do know tha
 To set up a development environment:
 
 1. Ensure you have Python 3.7+ installed.
-2. Create a virtual environment:
+2. setup the virtual environment:
     ```bash
+    # Create a virtual environment
     python3 -m venv .venv
-    ```
-3. Activate the virtual environment:
-    - On Linux/macOS:
-      ```bash
-      source .venv/bin/activate
-      ```
-    - On Windows:
-      ```cmd
-      .venv\Scripts\activate
-      ```
-4. Install dependencies:
-    ```bash
+    # Activate the virtual environment
+    source .venv/bin/activate
+    # Install dependencies
     pip install -r requirements.txt
-    ```
-5. Install the package in editable (dev) mode:
-    ```bash
+    # Install the package in editable (dev) mode
     pip install -e .
     ```
 

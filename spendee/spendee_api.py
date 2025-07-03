@@ -1,28 +1,15 @@
 from uuid import uuid4
 import datetime
-
-import requests
-from requests import Session
+from .firebase_client import FirebaseClient
 from requests.exceptions import RequestException
 
 from .exceptions import SpendeeError
 
 
-class Spendee(Session):
+class SpendeeApi(FirebaseClient):
     def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84'):
-        """
-        :param email: user email to use for login
-        :param password: user password to use for login
-        :param base_url: base URL of the API
-        """
         self.base_url = base_url
-        self._email = email
-        self._password = password
-        self._google_client_id = google_client_id
-
-        self._access_token = None
-        self._device_uuid = None
-        super(Spendee, self).__init__()
+        super().__init__(email, password, google_client_id)
 
     def _build_url(self, version: str, url: str):
         """
@@ -75,11 +62,12 @@ class Spendee(Session):
                 'Spendee-Version': 'master'
             }
 
+        # Ensure authentication
         if not self._access_token and not any(i in url for i in ('user-registration', 'googleapis')):
-            self.user_login()
+            self.authenticate()
 
         if self._access_token:
-            headers['Authorization'] = 'Bearer {}'.format(self._access_token)
+            headers['Authorization'] = f'Bearer {self._access_token}'
         if self._device_uuid:
             headers['Device-Uuid'] = self._device_uuid
 
@@ -87,7 +75,7 @@ class Spendee(Session):
 
         response = None
         try:
-            response = super(Spendee, self).request(method=method, url=url, headers=headers, params=params, **kwargs)
+            response = super(SpendeeApi, self).request(method=method, url=url, headers=headers, params=params, **kwargs)
             response.raise_for_status()
         except RequestException as e:
             raise SpendeeError("Spendee returned a non-200 HTTP code.", response=response) from e
@@ -105,6 +93,20 @@ class Spendee(Session):
             return result['result']
         else:
             return result
+
+    def get_device_uuid_from_login(self):
+        # Actually perform the login to get device_uuid
+        url = self._build_url('v3', 'auth/login')
+        payload = {
+            "global_currency": "USD",
+            "default_wallet_name": "Cash Wallet",
+            "timezone": 'Asia/Jakarta',
+            "platform": "web",
+            "version": "master",
+            "credential": None
+        }
+        response = super().post(url=url, json=payload)
+        return response.get('device_uuid')
 
     ###
 
@@ -172,26 +174,9 @@ class Spendee(Session):
             "device_uuid": device_uuid
         }
 
-        return super(Spendee, self).post(url=url, version=version, **kwargs)
+        return super(SpendeeApi, self).post(url=url, version=version, **kwargs)
 
-    def _get_refresh_token(self, email: str = None, password: str = None, **kwargs):
-        kwargs['json'] = {
-            'email': email,
-            'password': password,
-            'returnSecureToken': True,
-        }
-        url = 'https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key={}'.format(self._google_client_id)
-        response = super(Spendee, self).post(url=url, **kwargs)
-        return response['refreshToken']
-
-    def _get_access_token(self, refresh_token: str, **kwargs):
-        kwargs['json'] = {
-            'refresh_token': refresh_token,
-            'grant_type': 'refresh_token',
-        }
-        url = 'https://securetoken.googleapis.com/v1/token?key={}'.format(self._google_client_id)
-        response = super(Spendee, self).post(url=url, **kwargs)
-        return response['access_token']
+    ###
 
     def user_login(self, version: str = 'v3', url: str = 'auth/login', **kwargs):
         """
@@ -211,7 +196,7 @@ class Spendee(Session):
             "version": "master",
             "credential": None
         }
-        result = super(Spendee, self).post(url=url, version=version, **kwargs)
+        result = super(SpendeeApi, self).post(url=url, version=version, **kwargs)
         self._device_uuid = result['device_uuid']
 
     def user_logout(self, version: str = 'v1.4', url: str = 'user-logout', **kwargs):
@@ -221,7 +206,7 @@ class Spendee(Session):
         :rtype: bool
         :return: returns True if logout was successful
         """
-        return super(Spendee, self).post(url=url, version=version, **kwargs)
+        return super(SpendeeApi, self).post(url=url, version=version, **kwargs)
 
     def user_get_profile(self, version: str = 'v1.4', url: str = 'user-get-profile', **kwargs):
         """
