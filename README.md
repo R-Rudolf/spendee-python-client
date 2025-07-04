@@ -1,23 +1,22 @@
 # Spendee
 
-This is a Python API wrapper for interfacing with a wonderful [Spendee app](https://www.spendee.com/).
+This is a Python client for interfacing with the wonderful [Spendee app](https://www.spendee.com/).
+
+The codebase was forked from [dionysio/spendee](https://github.com/dionysio/spendee) (many thanks! <3) in 2025, which was authored in 2019-2020 and archived since then.
+
+About Spendee:
+> Spendee.com is a budget and expense tracker application to manage personal finances. It allows users to connect bank accounts, e-wallets, and crypto wallets to get an aggregated overview of their financial situation. The app helps users organize and analyze spending through automatic transaction categorization, visually appealing graphs, and insights.
 
 # Warning
 
 No guarantees are provided here. If you wanna use it, go for it, but do know that the original API is undocumented and while it works at the time of writing, it might stop at any time. I'm not associated with Spendee in any way.
 
-# Installation
-
-1. Be Python 3.7+ ready
-2. `pip install spendee`
-3. Enjoy.
-
 ## Development setup
 
-To set up a development environment:
+To set up a development environment (only linux is documented):
 
-1. Ensure you have Python 3.7+ installed.
-2. setup the virtual environment:
+1. Ensure you have Python 3.11+ installed.
+2. Setup the virtual environment:
     ```bash
     # Create a virtual environment
     python3 -m venv .venv
@@ -28,90 +27,26 @@ To set up a development environment:
     # Install the package in editable (dev) mode
     pip install -e .
     ```
+3. Set credentials in a newly created `.env` file.
+   ```bash
+   echo 'EMAIL=<email>' > .env
+   echo 'PASSWORD=<passwrod' >> .env
+   ```
+4. Adapt `run.py` for your experiment and execute.
 
-## Future Improvements
+## Backstory and roadmap
 
-- finish up all the endpoints [24/73]
-- make dates from the response datetime objects
-- release on pypi
+As I started to use the forked repo in 2025, the fetched data from the REST API was outdated by multiple days compared to what is visible on connected Bank accounts and the online webpage.
 
-## Endpoints
+In the interim time since the original author implemented the REST API calls in 2020, Spendee most possibly migrated to another architecture. Based on browser debugging the new setup relies on Google firestore.
 
-This is a list of all endpoints I've discovered. So far only a subset is implemented:
+Authentication was extracted into a base class, to keep REST API functionalities if needed, and new firestore based one was started to benefit from the same functionalities available from the original application.
 
-- [ ] v1/exchange-rate
-- [ ] v1/notification-count-unread
-- [ ] v1/notification-get-all
-- [ ] v1/notification-set
-- [ ] v1/user-check-email
-- [ ] v1/user-set-subscription
-- [ ] v1/wallet-accept-sharing
-- [ ] v1/wallet-get
-- [ ] v1/wallet-get-category
-- [ ] v1/wallet-get-users
-- [ ] v1/wallet-order-categories
-- [ ] v1.3/currencies
-- [ ] v1.3/delete-bank-login
-- [ ] v1.4/confirm-deletion
-- [ ] v1.4/confirm-email-change
-- [ ] v1.4/merge-categories
-- [ ] v1.4/recommendation-likelihood
-- [ ] v1.4/request-deletion
-- [ ] v1.4/request-email-change
-- [ ] v1.4/user-forgot-password
-- [ ] v1.4/user-get-profiles
-- [ ] v1.4/user-password-change-confirmation
-- [ ] v1.4/wallet-get-categories
-- [ ] v1.5/change-to-two-way-transfer
-- [ ] v1.5/delete-transfer-transaction
-- [ ] v1.5/link-two-transactions-into-transfer
-- [ ] v1.5/revert-transfer-to-regular-transaction
-- [ ] v1.5/transaction-suggestions
-- [ ] v1.5/transfer-funds
-- [ ] v1.5/update-transfer
-- [ ] v1.5/user-fb-connect
-- [ ] v1.5/user-google-connect
-- [ ] v1.5/viewed-dialogs
-- [ ] v1.5/wallet-create-transaction
-- [ ] v1.5/wallet-delete-transaction
-- [ ] v1.5/wallet-update-transaction
-- [ ] v1.6/get-transactions
-- [ ] v1.6/iframe-wallet-data?id=
-- [ ] v1.6/reorder-wallets
-- [ ] v1.6/wallet-get-transaction
-- [ ] v1.7/reorder-budgets
-- [ ] v1.8/create-transaction-template
-- [ ] v1.8/delete-transaction-template
-- [ ] v2/destroyCredentials
-- [X] v1.3/banks-get-all
-- [X] v1.3/category-image-ids
-- [X] v1.4/user-get-profile
-- [X] v1.4/user-login
-- [X] v1.4/user-logout
-- [X] v1.4/wallet-create-category
-- [X] v1.4/wallet-update-category
-- [X] v1.5/user-registration
-- [X] v1.5/user-update-profile
-- [X] v1.6/get-all-user-categories
-- [X] v1.6/user-currencies
-- [X] v1.7/create-budget
-- [X] v1.7/delete-budget
-- [X] v1.7/edit-budget
-- [X] v1.7/get-budgets
-- [X] v1.8/get-transaction-templates
-- [X] v1.8/wallet-get-transactions
-- [X] v1/wallet-create
-- [X] v1/wallet-delete
-- [X] v1/wallet-delete-category
-- [X] v1/wallet-get-all
-- [X] v1/wallet-invite-to-share
-- [X] v1/wallet-unshare-user
-- [X] v1/wallet-update
-- [X] v2/countries
-- [X] v2/logins/refresh
-- [X] v2/providers
-- [X] v2/url
-- [X] v2/visible
+Next step will be to abstract away the most common operations.
+
+After that groundwork, the plan is to implement an MCP server enabling AI agent collaboration to have smarter categorization and conversational exploration of spending habits.
+
+Until that last milestone this project is not recommended for usage.
 
 ## Contributing
 

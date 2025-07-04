@@ -1,6 +1,4 @@
 requests
 python-dotenv
-#pyrebase4
-#urllib3
 google-cloud-firestore
 google-auth

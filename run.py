@@ -15,7 +15,6 @@ if not EMAIL or not PASSWORD:
 
 # spendee = SpendeeApi(EMAIL, PASSWORD)
 
-
 # accounts = spendee.wallet_get_all()
 # print('Available accounts:')
 # for acc in accounts:
@@ -24,10 +23,3 @@ if not EMAIL or not PASSWORD:
 spendee = SpendeeFirestore(EMAIL, PASSWORD)
 
 print(spendee.example_call())
-
-# type = 'bank_account'
-# banks_get_all
-# -> last_fetch "today"
-# -> consent_expiration_date 2025.09.27
-# -> refresh_possible = 0
-# -> refresh_at today

@@ -7,6 +7,85 @@ from .exceptions import SpendeeError
 
 
 class SpendeeApi(FirebaseClient):
+    """
+    Spendee API client
+
+    This is a list of all endpoints discovered in 2020. So far only a subset is implemented:
+
+    - [ ] v1/exchange-rate
+    - [ ] v1/notification-count-unread
+    - [ ] v1/notification-get-all
+    - [ ] v1/notification-set
+    - [ ] v1/user-check-email
+    - [ ] v1/user-set-subscription
+    - [ ] v1/wallet-accept-sharing
+    - [ ] v1/wallet-get
+    - [ ] v1/wallet-get-category
+    - [ ] v1/wallet-get-users
+    - [ ] v1/wallet-order-categories
+    - [ ] v1.3/currencies
+    - [ ] v1.3/delete-bank-login
+    - [ ] v1.4/confirm-deletion
+    - [ ] v1.4/confirm-email-change
+    - [ ] v1.4/merge-categories
+    - [ ] v1.4/recommendation-likelihood
+    - [ ] v1.4/request-deletion
+    - [ ] v1.4/request-email-change
+    - [ ] v1.4/user-forgot-password
+    - [ ] v1.4/user-get-profiles
+    - [ ] v1.4/user-password-change-confirmation
+    - [ ] v1.4/wallet-get-categories
+    - [ ] v1.5/change-to-two-way-transfer
+    - [ ] v1.5/delete-transfer-transaction
+    - [ ] v1.5/link-two-transactions-into-transfer
+    - [ ] v1.5/revert-transfer-to-regular-transaction
+    - [ ] v1.5/transaction-suggestions
+    - [ ] v1.5/transfer-funds
+    - [ ] v1.5/update-transfer
+    - [ ] v1.5/user-fb-connect
+    - [ ] v1.5/user-google-connect
+    - [ ] v1.5/viewed-dialogs
+    - [ ] v1.5/wallet-create-transaction
+    - [ ] v1.5/wallet-delete-transaction
+    - [ ] v1.5/wallet-update-transaction
+    - [ ] v1.6/get-transactions
+    - [ ] v1.6/iframe-wallet-data?id=
+    - [ ] v1.6/reorder-wallets
+    - [ ] v1.6/wallet-get-transaction
+    - [ ] v1.7/reorder-budgets
+    - [ ] v1.8/create-transaction-template
+    - [ ] v1.8/delete-transaction-template
+    - [ ] v2/destroyCredentials
+    - [X] v1.3/banks-get-all
+    - [X] v1.3/category-image-ids
+    - [X] v1.4/user-get-profile
+    - [X] v1.4/user-login
+    - [X] v1.4/user-logout
+    - [X] v1.4/wallet-create-category
+    - [X] v1.4/wallet-update-category
+    - [X] v1.5/user-registration
+    - [X] v1.5/user-update-profile
+    - [X] v1.6/get-all-user-categories
+    - [X] v1.6/user-currencies
+    - [X] v1.7/create-budget
+    - [X] v1.7/delete-budget
+    - [X] v1.7/edit-budget
+    - [X] v1.7/get-budgets
+    - [X] v1.8/get-transaction-templates
+    - [X] v1.8/wallet-get-transactions
+    - [X] v1/wallet-create
+    - [X] v1/wallet-delete
+    - [X] v1/wallet-delete-category
+    - [X] v1/wallet-get-all
+    - [X] v1/wallet-invite-to-share
+    - [X] v1/wallet-unshare-user
+    - [X] v1/wallet-update
+    - [X] v2/countries
+    - [X] v2/logins/refresh
+    - [X] v2/providers
+    - [X] v2/url
+    - [X] v2/visible
+    """
     def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84'):
         self.base_url = base_url
         super().__init__(email, password, google_client_id)
