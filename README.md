@@ -24,8 +24,6 @@ To set up a development environment (only linux is documented):
     source .venv/bin/activate
     # Install dependencies
     pip install -r requirements.txt
-    # Install the package in editable (dev) mode
-    pip install -e .
     ```
 3. Set credentials in a newly created `.env` file.
    ```bash
