@@ -6,7 +6,6 @@ from .firebase_client import FirebaseClient
 
 import json
 import datetime
-from jwt import JWT, exceptions as jwt_exceptions
 import logging
 
 # Improvement ideas:
@@ -28,18 +27,20 @@ class CustomFirebaseCredentials(Credentials):
         super().__init__()
         self.firebase_client = firebase_client
         self.token = firebase_client.access_token
-        # self.expiry = None
-        
+        self.expiry = firebase_client._token_expiration()  # Set expiry from JWT
+
+    # Not validated if refresh really happens after expiry
     def refresh(self, request):
-        logger.info("Refreshing Firebase credentials.")
+        logger.debug("Refreshing Firebase credentials if needed")
         return_value = self.firebase_client._token_refresh()
         self.token = self.firebase_client.access_token
-        logger.info("Firebase credentials refreshed.")
+        self.expiry = self.firebase_client._token_expiration()  # Update expiry
+        logger.debug("Firebase credentials refreshed if needed.")
         return return_value # not sure about this
     
     def expired(self):
         logger.info("Checking if Firebase token is expired.")
-        self.firebase_client._token_expired()
+        return self.firebase_client._token_expired()
 
 
 class SpendeeFirestore(FirebaseClient):
@@ -58,28 +59,43 @@ class SpendeeFirestore(FirebaseClient):
         logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
 
     def _token_refresh(self):
-        logger.info("Refreshing access token if expired.")
+        logger.debug("Refreshing access token if expired.")
         if self._token_expired():
             self._access_token = self.get_access_token()
             self.credentials.token = self._access_token
             logger.info("Access token refreshed.")
             return True
-        logger.info("Access token is still valid.")
+        logger.debug("Access token is still valid.")
         return False
 
-    # not tested, return value is possibly wrong
-    def _token_expired(self):
-        logger.info("Checking if access token is expired.")
+    def _token_expiration(self):
+        """
+        Extracts the 'exp' field from the JWT access token and returns it as a datetime object (UTC).
+        Returns None if the field is missing or token is invalid.
+        """
         try:
-            self._jwt_instance.decode(self.access_token, do_verify=False, do_time_check=True)
+            payload = self._jwt_instance.decode(self.access_token, do_verify=False)
+            exp = payload.get('exp')
+            if exp is not None:
+                exp_time = datetime.datetime.fromtimestamp(exp, datetime.timezone.utc)
+                logger.debug(f"Token expiration time: {exp_time}")
+                return exp_time
+        except Exception as e:
+            logger.warning(f"Failed to extract 'exp' from JWT: {e}")
+        return None
+
+    def _token_expired(self):
+        logger.debug("Checking if access token is expired.")
+        expiry = self._token_expiration()
+        if expiry is None:
+            logger.info("Could not determine token expiry, assuming expired.")
+            return True
+        now = datetime.datetime.now(datetime.timezone.utc)  # Make now timezone-aware
+        if now >= expiry:
             logger.info("Access token is expired.")
             return True
-        except jwt_exceptions.JWTDecodeError as e:
-            logger.info(f"Access token is valid: {e}")
-            return False
-        # from credentials.py
-        # skewed_expiry = self.expiry - _helpers.REFRESH_THRESHOLD
-        # return _helpers.utcnow() >= skewed_expiry
+        logger.debug("Access token is valid.")
+        return False
 
     def _json_serializer(self, obj):
         # Handle Firestore DatetimeWithNanoseconds objects
