@@ -7,6 +7,7 @@ from .firebase_client import FirebaseClient
 import json
 import datetime
 from jwt import JWT, exceptions as jwt_exceptions
+import logging
 
 # Improvement ideas:
 # - Implement token expiration check in CustomFirebaseCredentials
@@ -18,6 +19,7 @@ from jwt import JWT, exceptions as jwt_exceptions
 # Note: User document has field: firestoreDataExportDone, which is True.
 # Which is a trace of the migration from REST API to Firestore.
 
+logger = logging.getLogger(__name__)
 
 class CustomFirebaseCredentials(Credentials):
     """Custom credentials that use existing Firebase access token"""
@@ -29,66 +31,94 @@ class CustomFirebaseCredentials(Credentials):
         # self.expiry = None
         
     def refresh(self, request):
+        logger.info("Refreshing Firebase credentials.")
         return_value = self.firebase_client._token_refresh()
         self.token = self.firebase_client.access_token
+        logger.info("Firebase credentials refreshed.")
         return return_value # not sure about this
     
     def expired(self):
+        logger.info("Checking if Firebase token is expired.")
         self.firebase_client._token_expired()
 
 
 class SpendeeFirestore(FirebaseClient):
 
     def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84'):
+        logger.info("Initializing SpendeeFirestore client.")
         self.base_url = base_url
         super().__init__(email, password, google_client_id)
         self.authenticate()
         self.credentials = CustomFirebaseCredentials(self)
         self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
-        self.jwt = JWT() # https://github.com/GehirnInc/python-jwt/blob/master/jwt/jwt.py
-        access_token_data = self.jwt.decode(self.access_token, do_verify=False)
+        access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
         self.user_id = access_token_data.get('user_id', None)
         self.email = access_token_data.get('email', None)
         self.user_name = access_token_data.get('name', None)
+        logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
 
     def _token_refresh(self):
+        logger.info("Refreshing access token if expired.")
         if self._token_expired():
             self._access_token = self.get_access_token()
             self.credentials.token = self._access_token
+            logger.info("Access token refreshed.")
             return True
+        logger.info("Access token is still valid.")
         return False
 
     # not tested, return value is possibly wrong
     def _token_expired(self):
+        logger.info("Checking if access token is expired.")
         try:
-            self.jwt.decode(self.access_token, do_verify=False, do_time_check=True)
+            self._jwt_instance.decode(self.access_token, do_verify=False, do_time_check=True)
+            logger.info("Access token is expired.")
             return True
         except jwt_exceptions.JWTDecodeError as e:
+            logger.info(f"Access token is valid: {e}")
             return False
         # from credentials.py
         # skewed_expiry = self.expiry - _helpers.REFRESH_THRESHOLD
         # return _helpers.utcnow() >= skewed_expiry
 
+    def _json_serializer(self, obj):
+        # Handle Firestore DatetimeWithNanoseconds objects
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+
+
+    def as_json(self, obj):
+        return json.dumps(obj, indent=2, default=self._json_serializer, ensure_ascii=False)
+
+    # --- Spendee API methods ---
 
     def _get_raw_category(self, category_id: str, as_json: bool = False):
+        logger.info(f"Fetching raw category: {category_id}")
         obj = self.client.document(f"users/{self.user_id}/categories/{category_id}").get().to_dict()
+        logger.debug(f"Fetched raw category content: {obj}")
         return self.as_json(obj) if as_json else obj
 
 
     def _get_raw_label(self, label_id: str, as_json: bool = False):
+        logger.info(f"Fetching raw label: {label_id}")
         obj = self.client.document(f"users/{self.user_id}/labels/{label_id}").get().to_dict()
+        logger.debug(f"Fetched raw label content: {obj}")
         return self.as_json(obj) if as_json else obj
 
 
     def _list_raw_categories(self, as_json: bool = False):
+        logger.info("Listing all raw categories.")
         raw_data = [
             x.to_dict()
             for x in self.client.collection(f'users/{self.user_id}/categories').get()
         ]
+        logger.debug(f"Fetched raw categories content: {raw_data}")
         return self.as_json(raw_data) if as_json else raw_data
     
 
     def list_categories(self, as_json: bool = False):
+        logger.info("Listing categories.")
         """
         Returns a list of categories for the user.
         If as_json is True, returns the data as a JSON string.
@@ -100,19 +130,22 @@ class SpendeeFirestore(FirebaseClient):
                 'name': raw_data.get('name'),
                 'type': raw_data.get('type'),
             })
-
+        logger.debug(f"Fetched categories content: {data}")
         return self.as_json(data) if as_json else data
 
 
     def _list_raw_labels(self, as_json: bool = False):
+        logger.info("Listing all raw labels.")
         raw_data = [
             x.to_dict()
             for x in self.client.collection(f'users/{self.user_id}/labels').get()
         ]
+        logger.debug(f"Fetched raw labels content: {raw_data}")
         return self.as_json(raw_data) if as_json else raw_data
 
 
     def list_labels(self, as_json: bool = False):
+        logger.info("Listing labels.")
         """
         Returns a list of labels for the user.
         If as_json is True, returns the data as a JSON string.
@@ -124,7 +157,7 @@ class SpendeeFirestore(FirebaseClient):
                 # attention: here I switch from fieldName 'text' to 'name', for consistency with categories
                 'name': raw_data.get('text'),
             })
-
+        logger.debug(f"Fetched labels content: {data}")
         return self.as_json(data) if as_json else data
 
 
@@ -158,10 +191,12 @@ class SpendeeFirestore(FirebaseClient):
             converted_value = amount * exchange_rate
             total += converted_value
         
+        logger.info(f"Total balance calculated: {total + Decimal(str(starting_balance))}")
         return round(total + Decimal(str(starting_balance)))
 
 
     def list_wallets(self):
+        logger.info("Listing wallets.")
         raw_data = [
             x.to_dict()
             for x in self.client.collection(f'users/{self.user_id}/wallets').get()
@@ -179,20 +214,13 @@ class SpendeeFirestore(FirebaseClient):
                 'visibleCategories': wallet.get('visibleCategories', []),
                 'startingBalance': wallet['startingBalance'],
             })
+        logger.info(f"Active wallets found: {len(return_data)}")
+        logger.debug(f"Fetched wallets content: {return_data}")
         return return_data
 
 
-    def _json_serializer(self, obj):
-        # Handle Firestore DatetimeWithNanoseconds objects
-        if hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        raise TypeError(f"Type {type(obj)} not serializable")
-
-
-    def as_json(self, obj):
-        return json.dumps(obj, indent=2, default=self._json_serializer, ensure_ascii=False)
-
-
     def _get_raw_transaction(self, wallet_id: str, transaction_id: str, as_json: bool = False):
+        logger.info(f"Fetching raw transaction: wallet_id={wallet_id}, transaction_id={transaction_id}")
         obj = self.client.document(f"users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}").get().to_dict()
+        logger.debug(f"Fetched raw transaction content: {obj}")
         return self.as_json(obj) if as_json else obj
