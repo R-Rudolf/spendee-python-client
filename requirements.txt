@@ -3,3 +3,5 @@ python-dotenv
 google-cloud-firestore
 google-auth
 jwt
+mcp[cli]
+httpx
