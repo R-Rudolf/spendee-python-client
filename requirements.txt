@@ -1,7 +1,10 @@
+# spendee client
 requests
 python-dotenv
 google-cloud-firestore
 google-auth
 jwt
+
+# mcp
 mcp[cli]
-httpx
+fastapi

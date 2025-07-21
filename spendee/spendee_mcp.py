@@ -1,5 +1,11 @@
-from mcp.server.fastmcp import FastMCP
+
+import os
 import logging
+import contextlib
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from mcp.server.fastmcp import FastMCP
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 # to start (after .venv setup):
 # python spendee/spendee_mcp.py
@@ -10,20 +16,57 @@ import logging
 # setup "Transport Type" to "Streamable HTTP"
 # and "Server URL" to "http://localhost:8000/mcp"
 
+ACCEPTED_TOKEN = os.environ.get("MCP_TOKEN", "spendee-token")
+
 logging.basicConfig(level=logging.DEBUG)
-mcp = FastMCP("spendee", host="0.0.0.0", port=8000)
+logger = logging.getLogger(__name__)
+
+mcp = FastMCP("spendee")
 
 @mcp.tool()
 def get_wallets():
     # Hardcoded example wallets
-    example_wallets = [
+    return [
         {"id": 1, "name": "Main Account", "currency": "USD", "balance": 1234.56},
         {"id": 2, "name": "Savings", "currency": "EUR", "balance": 7890.12},
     ]
-    return example_wallets
 
+# --- Extra authentication layer ---
+session_manager = StreamableHTTPSessionManager(
+    app=mcp._mcp_server,  # Use the underlying MCPServer instance
+)
+
+async def auth_middleware(scope, receive, send):
+    request = Request(scope, receive)
+    auth_header = request.headers.get("authorization")
+
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        logger.warning("Missing or invalid Authorization header.")
+        raise HTTPException(401, "Missing or invalid Authorization header.")
+
+    token = auth_header.split(" ", 1)[1]
+    if token != ACCEPTED_TOKEN:
+        logger.warning("Invalid or expired token.")
+        raise HTTPException(401, "Invalid or expired token.")
+
+    await session_manager.handle_request(scope, receive, send)
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with session_manager.run():
+        logger.info("StreamableHTTPSessionManager started.")
+        yield
+        logger.info("StreamableHTTPSessionManager stopped.")
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/mcp", auth_middleware)
+
+# --- Server Execution ---
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    logger.info("Starting Spendee MCP Server with Bearer Token Authentication")
+    logger.info("Access the MCP endpoint at http://0.0.0.0:8000/mcp")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 # relevant URLs for learning:
 # - https://modelcontextprotocol.io/specification/2025-06-18/server/tools
