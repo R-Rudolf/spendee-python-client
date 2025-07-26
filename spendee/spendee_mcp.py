@@ -6,6 +6,12 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from mcp.server.fastmcp import FastMCP
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+import contextlib
+
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
+from mcp.server.fastmcp import FastMCP
 
 # to start (after .venv setup):
 #   python spendee/spendee_mcp.py
@@ -75,17 +81,20 @@ def get_wallets():
 #     uvicorn.run(app, host="0.0.0.0", port=PORT)
 
 def server_with_sse():
-    app = FastAPI()
-    @app.get("/")
-    def read_root():
-        return {"Hello": "World"}
-    #from app.sse import create_sse_server
-    app.mount("/", app.sse.create_sse_server(mcp))
+
+    # Create the Starlette app and mount the MCP servers
+    app = Starlette(
+        routes=[
+            Mount("/", mcp.sse_app()),
+        ],
+    )
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
+
 
 if __name__ == "__main__":
     logger.info("Starting Spendee MCP Server as SSE without authentication")
-    mcp.run(transport="sse") # for n8n compatibility, authentication implemented on cloudflare level
-    #server_with_sse()
+    # for n8n compatibility, authentication implemented on cloudflare level
+    server_with_sse()
 
     # if DISABLE_AUTH:
     #     logger.warning("Running without authentication! This is insecure and should only be used for local testing.")
