@@ -41,51 +41,101 @@ def get_wallets():
     ]
 
 
-# def server_with_authentication():
-#     session_manager = StreamableHTTPSessionManager(
-#         app=mcp._mcp_server,  # Use the underlying MCPServer instance
-#     )
+def server_with_authentication():
+    session_manager = StreamableHTTPSessionManager(
+        app=mcp._mcp_server,  # Use the underlying MCPServer instance
+    )
 
-#     async def auth_middleware(scope, receive, send):
-#         request = Request(scope, receive)
-#         # Log request method, url, and headers for troubleshooting
-#         if DEBUG_MODE:
-#             logger.debug(f"Incoming request: method={request.method}, url={request.url}")
-#             logger.debug(f"Request headers: {dict(request.headers)}")
+    async def auth_middleware(scope, receive, send):
+        request = Request(scope, receive)
+        # Log request method, url, and headers for troubleshooting
+        if DEBUG_MODE:
+            logger.debug(f"Incoming request: method={request.method}, url={request.url}")
+            logger.debug(f"Request headers: {dict(request.headers)}")
 
-#         auth_header = request.headers.get("authorization")
+        auth_header = request.headers.get("authorization")
 
-#         if not auth_header or not auth_header.lower().startswith("bearer "):
-#             logger.warning("Missing or invalid Authorization header.")
-#             raise HTTPException(401, "Missing or invalid Authorization header.")
+        if not auth_header or not auth_header.lower().startswith("bearer "):
+            logger.warning("Missing or invalid Authorization header.")
+            raise HTTPException(401, "Missing or invalid Authorization header.")
 
-#         token = auth_header.split(" ", 1)[1]
-#         if token != ACCEPTED_TOKEN:
-#             logger.warning("Invalid or expired token.")
-#             raise HTTPException(401, "Invalid or expired token.")
+        token = auth_header.split(" ", 1)[1]
+        if token != ACCEPTED_TOKEN:
+            logger.warning("Invalid or expired token.")
+            raise HTTPException(401, "Invalid or expired token.")
 
-#         await session_manager.handle_request(scope, receive, send)
+        await session_manager.handle_request(scope, receive, send)
 
-#     @contextlib.asynccontextmanager
-#     async def lifespan(app: FastAPI):
-#         async with session_manager.run():
-#             logger.info("StreamableHTTPSessionManager started.")
-#             yield
-#             logger.info("StreamableHTTPSessionManager stopped.")
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with session_manager.run():
+            logger.info("StreamableHTTPSessionManager started.")
+            yield
+            logger.info("StreamableHTTPSessionManager stopped.")
 
-#     app = FastAPI(lifespan=lifespan)
-#     app.mount("/mcp", auth_middleware)
+    app = FastAPI(lifespan=lifespan)
+    app.mount("/mcp", auth_middleware)
 
-#     logger.info(f"Starting Spendee MCP Server with Bearer Token Authentication on port {PORT}")
-#     logger.info(f"Access the MCP endpoint at http://0.0.0.0:{PORT}/mcp")
-#     uvicorn.run(app, host="0.0.0.0", port=PORT)
+    logger.info(f"Starting Spendee MCP Server with Bearer Token Authentication on port {PORT}")
+    logger.info(f"Access the MCP endpoint at http://0.0.0.0:{PORT}/mcp")
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
 
 def server_with_sse():
 
-    # Create the Starlette app and mount the MCP servers
+    # Persistent SSE transport instance
+    sse_transport = mcp._sse_transport if hasattr(mcp, "_sse_transport") else None
+    if not sse_transport:
+        # Create and cache the transport instance
+        from mcp.server.sse import SseServerTransport
+        sse_transport = SseServerTransport("/messages/")
+        mcp._sse_transport = sse_transport
+
+    from starlette.requests import Request
+    from starlette.responses import Response
+    from starlette.types import Scope, Receive, Send
+
+    async def sse_auth_middleware(scope: Scope, receive: Receive, send: Send):
+        request = Request(scope, receive)
+        if DEBUG_MODE:
+            logger.debug(f"Incoming request: method={request.method}, url={request.url}")
+            logger.debug(f"Request headers: {dict(request.headers)}")
+
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.lower().startswith("bearer "):
+            logger.warning("Missing or invalid Authorization header.")
+            response = Response("Missing or invalid Authorization header.", status_code=401)
+            return await response(scope, receive, send)
+
+        token = auth_header.split(" ", 1)[1]
+        if token != ACCEPTED_TOKEN:
+            logger.warning("Invalid or expired token.")
+            response = Response("Invalid or expired token.", status_code=401)
+            return await response(scope, receive, send)
+
+        # If auth passes, route to the persistent SSE transport
+        # Mount /sse and /messages/ endpoints
+        from starlette.routing import Route, Mount
+        from starlette.applications import Starlette
+
+        # Only create the app once
+        if not hasattr(mcp, "_starlette_sse_app"):
+            async def handle_sse(request):
+                async with sse_transport.connect_sse(request.scope, request.receive, request._send) as streams:
+                    await mcp._mcp_server.run(streams[0], streams[1], mcp._mcp_server.create_initialization_options())
+                return Response()
+
+            routes = [
+                Route("/sse", endpoint=handle_sse, methods=["GET"]),
+                Mount("/messages/", app=sse_transport.handle_post_message),
+            ]
+            mcp._starlette_sse_app = Starlette(routes=routes)
+
+        await mcp._starlette_sse_app(scope, receive, send)
+
+    # Mount the auth middleware at root
     app = Starlette(
         routes=[
-            Mount("/", mcp.sse_app()),
+            Mount("/", sse_auth_middleware),
         ],
     )
     uvicorn.run(app, host="0.0.0.0", port=PORT)
