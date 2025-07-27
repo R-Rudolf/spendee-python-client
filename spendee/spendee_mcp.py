@@ -160,3 +160,6 @@ if __name__ == "__main__":
 # - https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#session-management
 # - https://github.com/modelcontextprotocol/python-sdk?tab=readme-ov-file#authentication
 # - auth inspiration: https://github.com/zahere-dev/mcp-labs/tree/main
+# - potential seamless support for both modes:
+#   - https://www.perplexity.ai/search/how-to-implement-a-backward-co-PW6zq_TUSN6rCZ8ztVW4lg
+#   - https://github.com/modelcontextprotocol/python-sdk?tab=readme-ov-file#low-level-server
