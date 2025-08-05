@@ -13,7 +13,6 @@ import logging
 # - Implement refresh logic in CustomFirebaseCredentials
 # - Cache refresh token between sessions
 # - Check if device UUID should be stable or if it can be removed
-# - Cache user data (like wallets) to avoid unnecessary API calls
 
 # Note: User document has field: firestoreDataExportDone, which is True.
 # Which is a trace of the migration from REST API to Firestore.
@@ -56,6 +55,7 @@ class SpendeeFirestore(FirebaseClient):
         self.user_id = access_token_data.get('user_id', None)
         self.email = access_token_data.get('email', None)
         self.user_name = access_token_data.get('name', None)
+        self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
         logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
 
     def _token_refresh(self):
@@ -179,16 +179,18 @@ class SpendeeFirestore(FirebaseClient):
 
     def get_wallet_balance(self, wallet_id: str, start: str = None, end: str = None):
         """
-        Returns the balance of the wallet with the given ID for a specific timeframe.
+        Returns the balance of the wallet with the given wallet_id for a specific timeframe.
         The start and end parameters should be in ISO 8601 format. If not set, no filtering is done.
         """
+        logger.info(f"Calculating balance for wallet_id: {wallet_id}")
         query = self.client.collection(f'users/{self.user_id}/wallets/{wallet_id}/transactions')
 
         if start:
             query = query.where(filter=FieldFilter("madeAt", ">=", datetime.datetime.fromisoformat(start)))
             starting_balance = 0
         else:
-            starting_balance = self.client.document(f'users/{self.user_id}/wallets/{wallet_id}').get('startingBalance', 0)
+            starting_balance = self.client.document(f'users/{self.user_id}/wallets/{wallet_id}').get().to_dict()['startingBalance']
+
         if end:
             query = query.where(filter=FieldFilter("madeAt", "<=", datetime.datetime.fromisoformat(end)))
         query = query.order_by("madeAt")
@@ -227,8 +229,8 @@ class SpendeeFirestore(FirebaseClient):
                 'type': wallet['type'],
                 'currency': wallet['currency'],
                 'updatedAt': wallet.get('updatedAt', None),
-                'visibleCategories': wallet.get('visibleCategories', []),
-                'startingBalance': wallet['startingBalance'],
+                #'visibleCategories': wallet.get('visibleCategories', []),
+                #'startingBalance': wallet['startingBalance'],
             })
         logger.info(f"Active wallets found: {len(return_data)}")
         logger.debug(f"Fetched wallets content: {return_data}")

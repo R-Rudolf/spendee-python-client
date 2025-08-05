@@ -14,4 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Entrypoint for MCP server (mock get_wallets, ready for spendee_firestore)
-CMD ["python", "/app/spendee/spendee_mcp.py"]
+#CMD ["python", "/app/spendee/spendee_mcp.py"]
+CMD ["python", "-m", "spendee.spendee_mcp"]

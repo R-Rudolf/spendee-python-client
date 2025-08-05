@@ -37,10 +37,11 @@ spendee = SpendeeFirestore(EMAIL, PASSWORD)
 
 
 #print(spendee.list_labels(as_json=True))
-print(spendee.list_categories(as_json=True))
+#print(spendee.list_categories(as_json=True))
 #print(spendee.get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'a15d8379-6884-4e7d-a007-a1748b62e9d3', as_json=True))
-#print(spendee.get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
-# wallets = spendee.list_wallets()
+print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
+print("listwallets: ", spendee.list_wallets())
+print("rafi balance: ", spendee.get_wallet_balance('Rafi'))
 # for wallet in wallets:
 #     print(wallet['name'])
 #     print(spendee.get_wallet_balance(wallet['id'], start='2025-07-02T00:00:00Z'))

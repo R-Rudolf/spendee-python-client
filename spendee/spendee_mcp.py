@@ -3,17 +3,22 @@ import os
 import logging
 import contextlib
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+import hashlib
+import secrets
+
 from mcp.server.fastmcp import FastMCP
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.sse import SseServerTransport
+
+from fastapi import FastAPI, HTTPException, Request
+
 from starlette.routing import Route, Mount
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
-from mcp.server.sse import SseServerTransport
-import hashlib
-import secrets
+
+from spendee.spendee_firestore import SpendeeFirestore
 
 # to start (after .venv setup):
 #   python spendee/spendee_mcp.py
@@ -26,30 +31,80 @@ import secrets
 # setup for "Transport Type": "SSE"
 #    "Server URL" to "http://localhost:8000/sse"
 
+EMAIL = os.getenv('EMAIL')
+PASSWORD = os.getenv('PASSWORD')
+
 ACCEPTED_TOKEN = os.environ.get("MCP_TOKEN", "spendee-token")
 PORT = int(os.environ.get("MCP_PORT", 8000))
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "") != ""
 TRANSFER_MODE = os.environ.get("TRANSFER_MODE", "sse").lower()
 
+
 if TRANSFER_MODE not in ["sse", "streamable-http"]:
     raise ValueError("TRANSFER_MODE must be either 'sse' or 'streamable-http'")
+
+if not EMAIL or not PASSWORD:
+    raise ValueError('Please set EMAIL and PASSWORD as an ENV variable.')
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("spendee", host="0.0.0.0", port=PORT)
+spendee = SpendeeFirestore(EMAIL, PASSWORD)
+
+def main():
+    #debug_secret(ACCEPTED_TOKEN, "MCP_TOKEN")
+    #debug_secret(PASSWORD, "PASSWORD")
+
+    logger.info("Starting Spendee MCP Server")
+    # I failed to unify both transfer modes, because of some lifecycle issues
+    if TRANSFER_MODE == "streamable-http":
+        logger.info("Using Streamable HTTP transport")
+        streaming_server()
+    else:
+        logger.info("Using SSE transport")
+        sse_server()
+
 
 @mcp.tool()
-def get_wallets():
-    # Hardcoded example wallets
-    return [
-        {"id": 1, "name": "Main Account", "currency": "USD", "balance": 1234.56},
-        {"id": 2, "name": "Savings", "currency": "EUR", "balance": 7890.12},
-    ]
+def get_wallet_balance(wallet_id: str, start: str = None, end: str = None):
+    """Get the balance of a wallet for a specific timeframe.
+    The start and end parameters should be in ISO 8601 format. If not set,
+    no filtering is done.
+    Args:
+        wallet_id (str): Name of the wallet. (Should be equal to the results of list_wallets call)
+        start (str, optional): Start date in ISO 8601 format.
+        end (str, optional): End date in ISO 8601 format.
+    Returns:
+        int: The balance of the wallet.
+    """
+    return spendee.get_wallet_balance(wallet_id, start, end)
+
+@mcp.tool()
+def list_wallets():
+    """List all wallets for the authenticated user. This is required before wallet related calls, to have exact string for names.
+    Each wallet is represented by an object with the following fields:
+    - id: Unique identifier of the wallet
+    - name: Name of the wallet
+    - type: Type of the wallet (e.g., cash, bank, etc.)
+    - currency: Currency of the wallet
+    - updatedAt: Last updated timestamp of the wallet
+    """
+    return spendee.list_wallets()
 
 # Authentication middleware and server setup
 
+def debug_secret(secret, name):
+    salt = secrets.token_hex(5)
+    token_hash = hashlib.sha256((salt + secret).encode()).hexdigest()
+    logger.debug(f"sha256('{salt}' + token): {token_hash}")
+    logger.debug(f"You can verify with: echo -n \"{salt}${name}\" | sha256sum")
+
 async def check_bearer_auth(request, error_response=None):
+    if ACCEPTED_TOKEN == "disabled":
+        logger.info("Bearer token authentication is disabled.")
+        return None
+
     if DEBUG_MODE:
         logger.debug(f"Incoming request: method={request.method}, url={request.url}")
         logger.debug(f"Request headers: {dict(request.headers)}")
@@ -64,7 +119,6 @@ async def check_bearer_auth(request, error_response=None):
     token = auth_header.split(" ", 1)[1]
     if token != ACCEPTED_TOKEN:
         logger.warning("Invalid token.")
-        logger.debug(f"Expected token: '{ACCEPTED_TOKEN}', received token: '{token}'")
         if error_response:
             return await error_response("Invalid token.", 401)
         raise HTTPException(401, "Invalid token.")
@@ -136,30 +190,4 @@ def sse_server():
 
 
 if __name__ == "__main__":
-    logger.info("Starting Spendee MCP Server")
-    salt = secrets.token_hex(5)
-    token_hash = hashlib.sha256((salt + ACCEPTED_TOKEN).encode()).hexdigest()
-    logger.debug(f"sha256('{salt}' + token): {token_hash}")
-    logger.debug(f"You can verify with: echo -n \"{salt}$MCP_TOKEN\" | sha256sum")
-
-    # I failed to unify both transfer modes, because of some lifecycle issues
-    if TRANSFER_MODE == "streamable-http":
-        logger.info("Using Streamable HTTP transport")
-        streaming_server()
-    else:
-        logger.info("Using SSE transport")
-        sse_server()
-
-
-# relevant URLs for learning:
-# - https://modelcontextprotocol.io/specification/2025-06-18/server/tools
-# - https://www.aibootcamp.dev/blog/remote-mcp-servers
-# - https://code.visualstudio.com/docs/copilot/chat/mcp-servers#_configuration-format
-# - https://docs.anthropic.com/en/docs/claude-code/mcp
-# - https://modelcontextprotocol.io/docs/tools/debugging
-# - https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#session-management
-# - https://github.com/modelcontextprotocol/python-sdk?tab=readme-ov-file#authentication
-# - auth inspiration: https://github.com/zahere-dev/mcp-labs/tree/main
-# - potential seamless support for both modes:
-#   - https://www.perplexity.ai/search/how-to-implement-a-backward-co-PW6zq_TUSN6rCZ8ztVW4lg
-#   - https://github.com/modelcontextprotocol/python-sdk?tab=readme-ov-file#low-level-server
+    main()
