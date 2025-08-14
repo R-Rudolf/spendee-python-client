@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
 
-from spendee.spendee_firestore import SpendeeFirestore
+from spendee.spendee_firestore import SpendeeFirestore, MCP_TOOLS
 
 # to start (after .venv setup):
 #   python spendee/spendee_mcp.py
@@ -50,7 +50,14 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("spendee", host="0.0.0.0", port=PORT)
+
 spendee = SpendeeFirestore(EMAIL, PASSWORD)
+
+# Automatically register all MCP tools from the client
+for name, func in MCP_TOOLS.items():
+    # Bind the method to the spendee instance if it's a class method
+    bound_func = getattr(spendee, name)
+    mcp.tool()(bound_func)
 
 def main():
     #debug_secret(ACCEPTED_TOKEN, "MCP_TOKEN")
@@ -64,33 +71,6 @@ def main():
     else:
         logger.info("Using SSE transport")
         sse_server()
-
-
-@mcp.tool()
-def get_wallet_balance(wallet_id: str, start: str = None, end: str = None):
-    """Get the balance of a wallet for a specific timeframe.
-    The start and end parameters should be in ISO 8601 format. If not set,
-    no filtering is done.
-    Args:
-        wallet_id (str): Name of the wallet. (Should be equal to the results of list_wallets call)
-        start (str, optional): Start date in ISO 8601 format.
-        end (str, optional): End date in ISO 8601 format.
-    Returns:
-        int: The balance of the wallet.
-    """
-    return spendee.get_wallet_balance(wallet_id, start, end)
-
-@mcp.tool()
-def list_wallets():
-    """List all wallets for the authenticated user. This is required before wallet related calls, to have exact string for names.
-    Each wallet is represented by an object with the following fields:
-    - id: Unique identifier of the wallet
-    - name: Name of the wallet
-    - type: Type of the wallet (e.g., cash, bank, etc.)
-    - currency: Currency of the wallet
-    - updatedAt: Last updated timestamp of the wallet
-    """
-    return spendee.list_wallets()
 
 # Authentication middleware and server setup
 
@@ -190,4 +170,6 @@ def sse_server():
 
 
 if __name__ == "__main__":
+    main()
+else:
     main()
