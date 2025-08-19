@@ -3,12 +3,14 @@ from typing import Callable, Dict
 from google.auth.credentials import Credentials
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.oauth2 import service_account
 from .firebase_client import FirebaseClient
 
 import json
 import datetime
 import logging
 import re
+import os
 
 # Improvement ideas:
 # - Implement token expiration check in CustomFirebaseCredentials
@@ -53,21 +55,63 @@ class CustomFirebaseCredentials(Credentials):
 
 class SpendeeFirestore(FirebaseClient):
 
-    def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84'):
+    def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', 
+                 google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84',
+                 service_account_path: str = None):
         logger.info("Initializing SpendeeFirestore client.")
         self.base_url = base_url
-        super().__init__(email, password, google_client_id)
-        self.authenticate()
-        self.credentials = CustomFirebaseCredentials(self)
-        self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
-        access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
-        self.user_id = access_token_data.get('user_id', None)
-        self.email = access_token_data.get('email', None)
-        self.user_name = access_token_data.get('name', None)
+        self.service_account_path = service_account_path
+        
+        # Try service account authentication first if provided
+        if service_account_path and os.path.exists(service_account_path):
+            logger.info(f"Using service account authentication from: {service_account_path}")
+            self._init_with_service_account()
+        else:
+            logger.info("Using Firebase authentication.")
+            super().__init__(email, password, google_client_id)
+            self.authenticate()
+            self.credentials = CustomFirebaseCredentials(self)
+            self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
+            access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
+            self.user_id = access_token_data.get('user_id', None)
+            self.email = access_token_data.get('email', None)
+            self.user_name = access_token_data.get('name', None)
+        
+        # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
         self.category_name_map = { x['id']: x['name'] for x in self.list_categories()}
         self.label_name_map = { x['id']: x['name'] for x in self.list_labels()}
         logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
+
+    def _init_with_service_account(self):
+        """Initialize Firestore client using Google Cloud Service Account"""
+        try:
+            # Load service account credentials
+            credentials = service_account.Credentials.from_service_account_file(
+                self.service_account_path,
+                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            )
+            
+            # Create Firestore client
+            self.client = firestore.Client(project="spendee-app", credentials=credentials)
+            
+            # For service account auth, we need to determine the user_id differently
+            # This might need to be passed as a parameter or determined from the service account
+            # For now, we'll try to get it from environment variable or use a default
+            self.user_id = os.getenv('SPENDEE_USER_ID')
+            if not self.user_id:
+                logger.warning("SPENDEE_USER_ID environment variable not set. You may need to set this for service account authentication.")
+                # You might need to implement a way to get the user_id from the service account context
+                raise ValueError("SPENDEE_USER_ID environment variable is required for service account authentication")
+            
+            self.email = os.getenv('SPENDEE_USER_EMAIL', 'service-account@spendee-app.iam.gserviceaccount.com')
+            self.user_name = os.getenv('SPENDEE_USER_NAME', 'Service Account')
+            
+            logger.info(f"Service account authentication successful for user_id={self.user_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize with service account: {e}")
+            raise
 
     def _token_refresh(self):
         logger.debug("Refreshing access token if expired.")
@@ -122,6 +166,8 @@ class SpendeeFirestore(FirebaseClient):
     def _matches_filters(value, filters):
         for f in filters or []:
             field = f.get("field")
+            if field == "labels":
+                continue
             op = f.get("op")
             filter_value = f.get("value")
             v = value.get(field)
@@ -311,56 +357,60 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def get_transaction(self, wallet_id: str, transaction_id: str, as_json: bool = False):
+    def get_transaction(self, wallet_id: str, transaction_id: str, resolve_category: bool = True, resolve_labels: bool = True, as_json: bool = False):
         """Get a specific transaction by its ID from a wallet.
         Args:
-            wallet_id (str): ID of the wallet.
-            transaction_id (str): ID of the transaction.
+            wallet_id (str): UUID of the wallet.
+            transaction_id (str): UUID of the transaction.
+            resolve_category (bool, optional): If True, resolves the category to name.
+            resolve_labels (bool, optional): If True, resolves the labels to names.
             as_json (bool, optional): If True, returns the data as a JSON string.
         Returns:
             dict or str: The transaction data, either as a dictionary or JSON string.
         """
         value = self._get_raw_transaction(wallet_id, transaction_id)
-        # Convert category ID to category name using self.category_name_map
         category_id = value.get("category", "")
-        category_name = self.category_name_map.get(category_id, None)
+        category = category_id
+        if resolve_category:
+            # Convert category ID to category name using self.category_name_map
+            category = self.category_name_map.get(category_id, None)
+
+        labels = self._get_transation_labels(wallet_id, transaction_id, resolve_labels)
 
         data = {
             "note": value.get("note", ""),
             "madeAt": value.get("madeAt", ""),
-            "category": category_name,
+            "category": category,
             "type": value.get("type", ""),
             "isPending": value.get("isPending", ""),
             "amount": value.get("amount", ""),
+            "labels": labels,
         }
 
         logger.info(f"Getting transaction: wallet_id={wallet_id}, transaction_id={transaction_id}")
         return data if not as_json else self.as_json(data)
 
 
-    @mcp_tool
-    def list_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, fields: list = ["note", "madeAt", "category", "amount"], as_json: bool = False):
+    def list_raw_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, resolve_labels: bool = True, as_json: bool = False):
         """
-        List transactions for a wallet, filtered by date range and dynamic filters.
-
+        List raw transactions for a wallet, filtered by date range and dynamic filters.
+        
+        This method returns all fields from Firestore without any processing (e.g., category IDs are not resolved to names).
         Results are always sorted by 'madeAt' in descending order (most recent transactions first).
-        Each returned item has the same fields as get_transaction: id, note, madeAt, category (name), type, isPending, amount.
-        Optionally, the returned fields can be limited by the 'fields' parameter, default is ["note", "madeAt", "category", "amount"].
 
         Args:
-            wallet_id (str): ID of the wallet.
+            wallet_id (str): UUID of the wallet.
             start (str): Start date (ISO 8601, required).
             end (str, optional): End date (ISO 8601).
             filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
                 The 'field' and 'op' values must be strings.
                 Supported operators: "=", "~=", ">", ">=", "<", "<=", where "~=" is regex match.
             limit (int, optional): Max number of transactions to return (default 20).
-            fields (list, optional): List of field names to include in the result. Only supported fields are allowed.
             as_json (bool, optional): Return as JSON string if True.
         Returns:
-            list or str: List of transaction dicts or JSON string.
+            list or str: List of raw transaction dicts or JSON string.
         """
-        logger.info(f"Listing transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}, limit={limit}")
+        logger.info(f"Listing raw transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}, limit={limit}")
         query = self.client.collection(f'users/{self.user_id}/wallets/{wallet_id}/transactions')
 
         # Required start date
@@ -372,37 +422,155 @@ class SpendeeFirestore(FirebaseClient):
         query = query.order_by("madeAt", direction=firestore.Query.DESCENDING)
         transactions = query.stream()
 
-        allowed_fields = {"id", "note", "madeAt", "category", "type", "isPending", "amount"}
+        results = []
+        for transaction in transactions:
+            value = transaction.to_dict()
+            # Add the transaction ID to the raw data for consistency
+            value["id"] = value.get("path", {}).get("transaction", "")
+            if resolve_labels:
+                value["labels"] = self._get_transation_labels(wallet_id, value["id"], resolve_names=True)
+            if not self._matches_filters(value, filters):
+                continue
+            results.append(value)
+            if len(results) >= limit:
+                break
+
+        logger.info(f"Found {len(results)} raw transactions.")
+        return self.as_json(results) if as_json else results
+
+    @mcp_tool
+    def list_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, fields: list = ["note", "madeAt", "category", "amount", "labels"], as_json: bool = False):
+        """
+        List transactions for a wallet, filtered by date range and dynamic filters.
+
+        Results are always sorted by 'madeAt' in descending order (most recent transactions first).
+        Each returned item has the same fields as get_transaction: id, note, madeAt, category (name), type, isPending, amount.
+        Optionally, the returned fields can be limited by the 'fields' parameter, default is ["note", "madeAt", "category", "amount"].
+        Category IDs are automatically resolved to category names.
+
+        Args:
+            wallet_id (str): UUID of the wallet.
+            start (str): Start date (ISO 8601, required).
+            end (str, optional): End date (ISO 8601).
+            filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
+                The 'field' and 'op' values must be strings.
+                Supported operators: "=", "~=", ">", ">=", "<", "<=", where "~=" is regex match.
+                Does not support filtering by labels.
+            limit (int, optional): Max number of transactions to return (default 20).
+            fields (list, optional): List of field names to include in the result. Only supported fields are allowed.
+            as_json (bool, optional): Return as JSON string if True.
+        Returns:
+            list or str: List of transaction dicts or JSON string.
+        """
+        logger.info(f"Listing transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}, limit={limit}")
+        
+        # Validate fields parameter
+        allowed_fields = {"id", "note", "madeAt", "category", "type", "isPending", "amount", "labels"}
         if not isinstance(fields, list) or not all(isinstance(f, str) for f in fields):
             raise ValueError("'fields' must be a list of strings.")
         unsupported = set(fields) - allowed_fields
         if unsupported:
             raise ValueError(f"Unsupported fields requested: {unsupported}")
 
+        # Get raw transactions first
+        raw_transactions = self.list_raw_transactions(wallet_id, start, end, filters, limit, as_json=False)
+        
+        # Process raw transactions to resolve category IDs and apply field filtering
         results = []
-        for transaction in transactions:
-            value = transaction.to_dict()
-            # Match get_transaction output fields
-            category_id = value.get("category", "")
+        for raw_transaction in raw_transactions:
+            # Resolve category ID to category name
+            category_id = raw_transaction.get("category", "")
             category_name = self.category_name_map.get(category_id, None)
             if category_name is None:
                 logger.warning(f"Category ID {category_id} not found in category_name_map, using None.")
+            
+            # Create processed transaction data matching get_transaction output fields
             data = {
-                "id": value.get("path", {}).get("transaction", ""),
-                "note": value.get("note", ""),
-                "madeAt": value.get("madeAt", ""),
+                "id": raw_transaction.get("id", ""),
+                "labels": raw_transaction.get("labels", []),
+                "note": raw_transaction.get("note", ""),
+                "madeAt": raw_transaction.get("madeAt", ""),
                 "category": category_name,
-                "type": value.get("type", ""),
-                "isPending": value.get("isPending", ""),
-                "amount": value.get("amount", ""),
+                "type": raw_transaction.get("type", ""),
+                "isPending": raw_transaction.get("isPending", ""),
+                "amount": raw_transaction.get("amount", ""),
             }
-            if not self._matches_filters(data, filters):
-                continue
+            
+            # Apply field filtering
             if fields is not None:
                 data = {k: v for k, v in data.items() if k in fields}
+            
             results.append(data)
-            if len(results) >= limit:
-                break
 
         logger.info(f"Found {len(results)} transactions.")
         return self.as_json(results) if as_json else results
+
+    def _get_transation_labels(self, wallet_id: str, transaction_id: str, resolve_names: bool = True, as_json: bool = False):
+        """
+        Get the labels of a specific transaction by its ID from a wallet.
+        """
+        logger.info(f"Getting transaction labels: wallet_id={wallet_id}, transaction_id={transaction_id}")
+        # Query the transactionLabels collection instead of trying to get a single document
+        labels = [
+            x.get('label')
+            for x in self.client.collection(f'users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}/transactionLabels').get()
+        ]
+        if resolve_names:
+            labels = [self.label_name_map.get(label, label) for label in labels]
+        return self.as_json(labels) if as_json else labels
+
+    @mcp_tool
+    def edit_transaction(self, wallet_id: str, transaction_id: str, updates: dict):
+        """
+        Edit a specific transaction by its ID from a wallet.
+        
+        Args:
+            wallet_id (str): UUID of the wallet.
+            transaction_id (str): UUID of the transaction.
+            updates (dict): Dictionary containing the fields to update. Supported fields:
+                - note (str): Transaction note/description
+                - category (str): Category name (will be converted to category ID)
+            
+        Returns:
+            dict: The updated transaction data.
+        """
+        logger.info(f"Editing transaction: wallet_id={wallet_id}, transaction_id={transaction_id}, updates={updates}")
+        
+        # Get the current transaction data
+        current_data = self._get_raw_transaction(wallet_id, transaction_id)
+        if not current_data:
+            raise ValueError(f"Transaction {transaction_id} not found in wallet {wallet_id}")
+        
+        # Prepare the update data
+        update_data = {}
+        
+        # Handle each updatable field
+        if 'note' in updates:
+            update_data['note'] = updates['note']
+                
+        if 'category' in updates:
+            # Convert category name to category ID
+            category_name = updates['category']
+            category_id = None
+            for cat_id, cat_name in self.category_name_map.items():
+                if cat_name == category_name:
+                    category_id = cat_id
+                    break
+            if category_id is None:
+                raise ValueError(f"Category '{category_name}' not found. Available categories: {list(self.category_name_map.values())}")
+            update_data['category'] = category_id
+        
+        if not update_data:
+            logger.warning("No valid fields to update provided")
+            return self.get_transaction(wallet_id, transaction_id)
+        
+        # Try multiple approaches to match the web application's behavior
+        doc_ref = self.client.document(f"users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}")
+        update_data['updatedAt'] = firestore.SERVER_TIMESTAMP
+
+        try:
+            doc_ref.set(update_data, merge=True)
+            logger.info(f"Transaction {transaction_id} updated successfully using set with merge")
+        except Exception as e1:
+            logger.warning(f"Set with merge failed: {e1}")
+            raise e1
