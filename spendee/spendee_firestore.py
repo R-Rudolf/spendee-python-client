@@ -79,39 +79,11 @@ class SpendeeFirestore(FirebaseClient):
         
         # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
-        self.category_name_map = { x['id']: x['name'] for x in self.list_categories()}
+        categories = self.list_categories()
+        self.category_name_map = { x['id']: x['name'] for x in categories}
+        self.category_type_map = { x['id']: x['type'] for x in categories}
         self.label_name_map = { x['id']: x['name'] for x in self.list_labels()}
         logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
-
-    def _init_with_service_account(self):
-        """Initialize Firestore client using Google Cloud Service Account"""
-        try:
-            # Load service account credentials
-            credentials = service_account.Credentials.from_service_account_file(
-                self.service_account_path,
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
-            )
-            
-            # Create Firestore client
-            self.client = firestore.Client(project="spendee-app", credentials=credentials)
-            
-            # For service account auth, we need to determine the user_id differently
-            # This might need to be passed as a parameter or determined from the service account
-            # For now, we'll try to get it from environment variable or use a default
-            self.user_id = os.getenv('SPENDEE_USER_ID')
-            if not self.user_id:
-                logger.warning("SPENDEE_USER_ID environment variable not set. You may need to set this for service account authentication.")
-                # You might need to implement a way to get the user_id from the service account context
-                raise ValueError("SPENDEE_USER_ID environment variable is required for service account authentication")
-            
-            self.email = os.getenv('SPENDEE_USER_EMAIL', 'service-account@spendee-app.iam.gserviceaccount.com')
-            self.user_name = os.getenv('SPENDEE_USER_NAME', 'Service Account')
-            
-            logger.info(f"Service account authentication successful for user_id={self.user_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize with service account: {e}")
-            raise
 
     def _token_refresh(self):
         logger.debug("Refreshing access token if expired.")
@@ -157,7 +129,6 @@ class SpendeeFirestore(FirebaseClient):
         if hasattr(obj, 'isoformat'):
             return obj.isoformat()
         raise TypeError(f"Type {type(obj)} not serializable")
-
 
     def as_json(self, obj):
         return json.dumps(obj, indent=2, default=self._json_serializer, ensure_ascii=False)
@@ -220,7 +191,7 @@ class SpendeeFirestore(FirebaseClient):
         return self.as_json(raw_data) if as_json else raw_data
     
 
-    # ...existing code...
+    @mcp_tool
     def list_categories(self, as_json: bool = False):
         """
         Returns the list of categories of the user.
@@ -391,7 +362,7 @@ class SpendeeFirestore(FirebaseClient):
         return data if not as_json else self.as_json(data)
 
 
-    def list_raw_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, resolve_labels: bool = True, as_json: bool = False):
+    def _list_raw_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, resolve_labels: bool = True, resolve_category: bool = True, as_json: bool = False):
         """
         List raw transactions for a wallet, filtered by date range and dynamic filters.
         
@@ -427,6 +398,13 @@ class SpendeeFirestore(FirebaseClient):
             value = transaction.to_dict()
             # Add the transaction ID to the raw data for consistency
             value["id"] = value.get("path", {}).get("transaction", "")
+            if resolve_category:
+                # Resolve category ID to category name
+                category_id = value.get("category", None)
+                category_name = self.category_name_map.get(category_id, None)
+                if category_name is None:
+                    logger.warning(f"Category ID {category_id} not found in category_name_map, using None.")
+                
             if resolve_labels:
                 value["labels"] = self._get_transation_labels(wallet_id, value["id"], resolve_names=True)
             if not self._matches_filters(value, filters):
@@ -439,7 +417,14 @@ class SpendeeFirestore(FirebaseClient):
         return self.as_json(results) if as_json else results
 
     @mcp_tool
-    def list_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, fields: list = ["note", "madeAt", "category", "amount", "labels"], as_json: bool = False):
+    def list_transactions(self,
+                          wallet_id: str,
+                          start: str,
+                          end: str = None,
+                          filters: list = None,
+                          limit: int = 20,
+                          fields: list = ["note", "madeAt", "category", "amount", "labels"],
+                          as_json: bool = False):
         """
         List transactions for a wallet, filtered by date range and dynamic filters.
 
@@ -473,24 +458,18 @@ class SpendeeFirestore(FirebaseClient):
             raise ValueError(f"Unsupported fields requested: {unsupported}")
 
         # Get raw transactions first
-        raw_transactions = self.list_raw_transactions(wallet_id, start, end, filters, limit, as_json=False)
+        raw_transactions = self._list_raw_transactions(wallet_id, start, end, filters, limit, resolve_category=True, resolve_labels=True, as_json=False)
         
         # Process raw transactions to resolve category IDs and apply field filtering
         results = []
         for raw_transaction in raw_transactions:
-            # Resolve category ID to category name
-            category_id = raw_transaction.get("category", "")
-            category_name = self.category_name_map.get(category_id, None)
-            if category_name is None:
-                logger.warning(f"Category ID {category_id} not found in category_name_map, using None.")
-            
             # Create processed transaction data matching get_transaction output fields
             data = {
                 "id": raw_transaction.get("id", ""),
                 "labels": raw_transaction.get("labels", []),
                 "note": raw_transaction.get("note", ""),
                 "madeAt": raw_transaction.get("madeAt", ""),
-                "category": category_name,
+                "category": raw_transaction.get("category", ""),
                 "type": raw_transaction.get("type", ""),
                 "isPending": raw_transaction.get("isPending", ""),
                 "amount": raw_transaction.get("amount", ""),
@@ -558,8 +537,16 @@ class SpendeeFirestore(FirebaseClient):
                     break
             if category_id is None:
                 raise ValueError(f"Category '{category_name}' not found. Available categories: {list(self.category_name_map.values())}")
+            
+            category_type = self.category_type_map.get(category_id, None)
+            if str(category_type) == 'income' and int(current_data.get('amount', 0)) < 0:
+                raise ValueError(f"Cannot change category to income for a transaction with negative amount: {current_data.get('amount', 0)}")
+            elif str(category_type) == 'expense' and int(current_data.get('amount', 0)) > 0:
+                raise ValueError(f"Cannot change category to expense for a transaction with positive amount: {current_data.get('amount', 0)}")
+            elif category_type not in ['income', 'expense']:
+                logger.warning(f"Category type '{category_type}' is not valid for transaction: {transaction_id}")
             update_data['category'] = category_id
-        
+
         if not update_data:
             logger.warning("No valid fields to update provided")
             return self.get_transaction(wallet_id, transaction_id)
