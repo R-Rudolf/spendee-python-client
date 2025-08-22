@@ -11,6 +11,7 @@ import datetime
 import logging
 import re
 import os
+import uuid
 
 # Improvement ideas:
 # - Implement token expiration check in CustomFirebaseCredentials
@@ -56,26 +57,19 @@ class CustomFirebaseCredentials(Credentials):
 class SpendeeFirestore(FirebaseClient):
 
     def __init__(self, email: str, password: str, base_url: str = 'https://api.spendee.com/', 
-                 google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84',
-                 service_account_path: str = None):
+                 google_client_id: str = 'AIzaSyCCJPDxVNVFEARQ-LxH7q2aZtdQJGGFO84'):
         logger.info("Initializing SpendeeFirestore client.")
         self.base_url = base_url
-        self.service_account_path = service_account_path
         
-        # Try service account authentication first if provided
-        if service_account_path and os.path.exists(service_account_path):
-            logger.info(f"Using service account authentication from: {service_account_path}")
-            self._init_with_service_account()
-        else:
-            logger.info("Using Firebase authentication.")
-            super().__init__(email, password, google_client_id)
-            self.authenticate()
-            self.credentials = CustomFirebaseCredentials(self)
-            self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
-            access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
-            self.user_id = access_token_data.get('user_id', None)
-            self.email = access_token_data.get('email', None)
-            self.user_name = access_token_data.get('name', None)
+        logger.info("Using Firebase authentication.")
+        super().__init__(email, password, google_client_id)
+        self.authenticate()
+        self.credentials = CustomFirebaseCredentials(self)
+        self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
+        access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
+        self.user_id = access_token_data.get('user_id', None)
+        self.email = access_token_data.get('email', None)
+        self.user_name = access_token_data.get('name', None)
         
         # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
@@ -297,11 +291,9 @@ class SpendeeFirestore(FirebaseClient):
         - updatedAt: Last updated timestamp of the wallet
         """
 
+        # Fetch raw wallet documents (use helper to allow reuse)
         logger.info("Listing wallets.")
-        raw_data = [
-            x.to_dict()
-            for x in self.client.collection(f'users/{self.user_id}/wallets').get()
-        ]
+        raw_data = self._list_raw_wallets()
         return_data = []
         for wallet in raw_data:
             if wallet["status"] != 'active':
@@ -319,11 +311,45 @@ class SpendeeFirestore(FirebaseClient):
         logger.debug(f"Fetched wallets content: {return_data}")
         return return_data
 
+    def _list_raw_wallets(self, as_json: bool = False):
+        """Return raw wallet documents for the authenticated user.
+
+        This helper returns the full document dicts from Firestore without any
+        post-processing. It is intended for internal use by other methods that
+        need the unmodified wallet documents.
+        """
+        logger.info("Listing all raw wallets.")
+        raw_data = [
+            x.to_dict()
+            for x in self.client.collection(f'users/{self.user_id}/wallets').get()
+        ]
+        logger.debug(f"Fetched raw wallets content: {raw_data}")
+        return self.as_json(raw_data) if as_json else raw_data
+
 
     def _get_raw_transaction(self, wallet_id: str, transaction_id: str, as_json: bool = False):
         logger.info(f"Fetching raw transaction: wallet_id={wallet_id}, transaction_id={transaction_id}")
         obj = self.client.document(f"users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}").get().to_dict()
         logger.debug(f"Fetched raw transaction content: {obj}")
+        return self.as_json(obj) if as_json else obj
+
+    def _get_raw_document(self, doc_path: str, as_json: bool = False):
+        """
+        Fetch any document by its absolute Firestore path under the project, for example:
+          - users/{userId}
+          - users/{userId}/wallets/{walletId}
+          - users/{userId}/categories/{categoryId}
+        Returns the dict or JSON string when as_json=True.
+        """
+        logger.info(f"Fetching raw document: {doc_path}")
+        # Support leading/trailing slashes
+        doc_path = doc_path.strip('/')
+        try:
+            obj = self.client.document(doc_path).get().to_dict()
+        except Exception as e:
+            logger.exception(f"Failed to fetch document {doc_path}: {e}")
+            raise
+        logger.debug(f"Fetched raw document content for {doc_path}: {obj}")
         return self.as_json(obj) if as_json else obj
 
 
@@ -509,14 +535,17 @@ class SpendeeFirestore(FirebaseClient):
             updates (dict): Dictionary containing the fields to update. Supported fields:
                 - note (str): Transaction note/description
                 - category (str): Category name (will be converted to category ID)
-            
-        Returns:
-            dict: The updated transaction data.
+                - labels (str): A single string containing comma-separated operations where each
+                    element starts with '+' to add or '-' to remove a label. Example: "+McDonalds,-Rossmann".
+                    Labels must already exist for the user; unknown label names will raise ValueError.
+        Raises:
+            ValueError: If the transaction does not exist, or if invalid updates are provided.
         """
         logger.info(f"Editing transaction: wallet_id={wallet_id}, transaction_id={transaction_id}, updates={updates}")
         
         # Get the current transaction data
         current_data = self._get_raw_transaction(wallet_id, transaction_id)
+        current_label_ids = self._get_transation_labels(wallet_id, transaction_id, resolve_names=False)
         if not current_data:
             raise ValueError(f"Transaction {transaction_id} not found in wallet {wallet_id}")
         
@@ -547,17 +576,70 @@ class SpendeeFirestore(FirebaseClient):
                 logger.warning(f"Category type '{category_type}' is not valid for transaction: {transaction_id}")
             update_data['category'] = category_id
 
-        if not update_data:
-            logger.warning("No valid fields to update provided")
-            return self.get_transaction(wallet_id, transaction_id)
-        
-        # Try multiple approaches to match the web application's behavior
-        doc_ref = self.client.document(f"users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}")
-        update_data['updatedAt'] = firestore.SERVER_TIMESTAMP
+        # Handle labels operations: single string with comma separated ops, each starting with + or -
+        # Example: "+McDonalds,-Rossmann" -> add McDonalds, remove Rossmann
+        labels_to_add = set()
+        labels_to_delete = set()
+        if 'labels' in updates:
+            labels_val = updates.get('labels')
+            if not isinstance(labels_val, str):
+                raise ValueError("'labels' must be a string of comma-separated +Label or -Label operations")
 
-        try:
-            doc_ref.set(update_data, merge=True)
-            logger.info(f"Transaction {transaction_id} updated successfully using set with merge")
-        except Exception as e1:
-            logger.warning(f"Set with merge failed: {e1}")
-            raise e1
+            ops = [s.strip() for s in labels_val.split(',') if s.strip()]
+            coll_path = f'users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}/transactionLabels'
+            coll = self.client.collection(coll_path)
+            for op in ops:
+                if len(op) < 2:
+                    raise ValueError(f"Invalid label operation: '{op}'")
+                action = op[0]
+                label_name = op[1:].strip()
+                # find label id by name; label must exist
+                label_id = None
+                for lid, lname in self.label_name_map.items():
+                    if lname == label_name:
+                        label_id = lid
+                        break
+                if label_id is None:
+                    raise ValueError(f"Label not found: {label_name}")
+
+                if action == '+':
+                    if label_id not in current_label_ids:
+                        labels_to_add.add(label_id)
+                    else:
+                        logger.info(f"Label '{label_name}' already present on transaction {transaction_id}, skipping add.")
+                elif action == '-':
+                    # collect matching label doc refs to delete
+                    for doc in coll.where('label', '==', label_id).get():
+                        labels_to_delete.add(doc.reference)
+                else:
+                    raise ValueError(f"Unsupported label action: '{action}'")
+
+        transaction_path = f"users/{self.user_id}/wallets/{wallet_id}/transactions/{transaction_id}"
+
+
+        batch = self.client.batch()
+        for label_id in labels_to_add:
+            uuid_str = str(uuid.uuid4())
+            label_doc_ref = self.client.collection(f"{transaction_path}/transactionLabels").document(uuid_str)
+            batch.set(label_doc_ref, {
+                'label': label_id,
+                'createdAt': firestore.SERVER_TIMESTAMP,
+                'author': self.user_id,
+                'modelVersion': 1,
+                'path': {
+                    'user': self.user_id,
+                    'wallet': wallet_id,
+                    'transaction': transaction_id,
+                    'transactionLabel': uuid_str,
+                }
+            })
+        for label_doc_ref in labels_to_delete:
+            batch.delete(label_doc_ref)
+        
+        doc_ref = self.client.document(transaction_path)
+        update_data['updatedAt'] = firestore.SERVER_TIMESTAMP
+        batch.set(doc_ref, update_data, merge=True)
+
+        batch.update
+        batch.commit()
+

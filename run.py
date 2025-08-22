@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 from dotenv import load_dotenv
 from spendee import SpendeeApi
@@ -39,7 +40,14 @@ spendee = SpendeeFirestore(EMAIL, PASSWORD)
 #print(spendee.list_labels(as_json=True))
 #print(spendee.list_categories(as_json=True))
 #print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'a15d8379-6884-4e7d-a007-a1748b62e9d3', as_json=True))
-print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
+#print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
+# Example raw document dumps using the new helper. Paste these outputs back here to expand the schema.
+
+#print(spendee._get_raw_document(f"users/{spendee.user_id}", as_json=True))
+
+#print(spendee._list_raw_wallets(as_json=True))
+
+
 #print("listwallets: ", spendee.list_wallets())
 #print("rafi balance: ", spendee.get_wallet_balance('Rafi'))
 # for wallet in wallets:
@@ -60,22 +68,41 @@ print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4
 
 # Example: Update transaction note and category
 
-updated_transaction = spendee.edit_transaction(
-    wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
-    transaction_id='d2b4caa7-12eb-4c04-a744-d2bf7e02bdd2',
-    updates={
-        #'note': 'ADOMÁNY, Bogár Péter István2',
-        'category': "Other"  # Use category name, not ID
-        #'category': "Kafetéria"
-        #'category': "Szórakozás"
-    }
-)
-print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
+# updated_transaction = spendee.edit_transaction(
+#     wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
+#     transaction_id='d2b4caa7-12eb-4c04-a744-d2bf7e02bdd2',
+#     updates={
+#         #'note': 'ADOMÁNY, Bogár Péter István2',
+#         #'category': "Other"  # Use category name, not ID
+#         #'category': "Kafetéria"
+#         'category': "Szórakozás"
+#     }
+# )
+# print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
 #print(spendee.get_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', '875ebb1c-e03d-433f-a6c9-be0316f6c838', as_json=True))
 #print(spendee._get_transation_labels('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', '875ebb1c-e03d-433f-a6c9-be0316f6c838', as_json=True))
 
 # print(spendee.list_transactions('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', start='2025-08-01T00:00:00Z', filters=[{"field": "category", "op": "=", "value": None}], fields=["id", "note", "category"], as_json=True))
 
-# Example usage of logger for debug/info
-# logger.debug('Debug message')
-# logger.info('Info message')
+
+# Simple label tests (one add, one remove, then multiple ops)
+# Replace wallet_id and transaction_id with real IDs before running
+wallet_id = 'b368c5c2-68fe-4f98-9d4f-08e0cdca57a7'
+transaction_id = 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2'
+
+print(spendee.get_transaction(wallet_id, transaction_id))
+# print("Adding label 'McDonalds'")
+# print(spendee.edit_transaction(wallet_id=wallet_id, transaction_id=transaction_id, updates={'labels': '+McDonalds'}))
+# print(spendee.get_transaction(wallet_id, transaction_id))
+
+print("\n --- TEST CASE: Adding label 'McDonalds'")
+print(spendee.edit_transaction(wallet_id=wallet_id, transaction_id=transaction_id, updates={'labels': '+McDonalds'}))
+print(spendee.get_transaction(wallet_id, transaction_id))
+
+print("\n --- TEST CASE: Removing label 'Rossmann'")
+print(spendee.edit_transaction(wallet_id=wallet_id, transaction_id=transaction_id, updates={'labels': '-Rossmann'}))
+print(spendee.get_transaction(wallet_id, transaction_id))
+
+print("\n --- TEST CASE: Adding label 'Rossmann' and removing 'McDonalds' in one go")
+print(spendee.edit_transaction(wallet_id=wallet_id, transaction_id=transaction_id, updates={'labels': '+Rossmann,-McDonalds'}))
+print(spendee.get_transaction(wallet_id, transaction_id))
