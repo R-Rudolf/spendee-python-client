@@ -6,3 +6,5 @@ __pycache__
 .venv
 *.egg-info
 *.log
+# homelab related files
+re-deploy.sh

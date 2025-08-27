@@ -1,16 +1,14 @@
 from decimal import Decimal
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 from google.auth.credentials import Credentials
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from google.oauth2 import service_account
 from .firebase_client import FirebaseClient
 
 import json
 import datetime
 import logging
 import re
-import os
 import uuid
 
 # Improvement ideas:
@@ -130,13 +128,18 @@ class SpendeeFirestore(FirebaseClient):
     @staticmethod
     def _matches_filters(value, filters):
         for f in filters or []:
+            if "field" not in f or "op" not in f or "value" not in f:
+                raise ValueError(f"Invalid filter format: {f}")
             field = f.get("field")
-            if field == "labels":
-                continue
             op = f.get("op")
             filter_value = f.get("value")
             v = value.get(field)
-            if op == ">":
+            if op == "array-contains":
+                if field != "labels":
+                    raise ValueError("array-contains operator is only supported for 'labels' field")
+                if filter_value not in v:
+                    return False
+            elif op == ">":
                 if not (v is not None and float(v) > float(filter_value)):
                     return False
             elif op == ">=":
@@ -217,7 +220,7 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def list_labels(self, as_json: bool = False):
+    def list_labels(self, as_json: bool = False) -> list[Dict[str, str]]:
         """
         Returns the list of labels used by the user.
         If as_json is True, returns the data as a JSON string.
@@ -401,7 +404,7 @@ class SpendeeFirestore(FirebaseClient):
             end (str, optional): End date (ISO 8601).
             filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
                 The 'field' and 'op' values must be strings.
-                Supported operators: "=", "~=", ">", ">=", "<", "<=", where "~=" is regex match.
+                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
             limit (int, optional): Max number of transactions to return (default 20).
             as_json (bool, optional): Return as JSON string if True.
         Returns:
@@ -417,26 +420,36 @@ class SpendeeFirestore(FirebaseClient):
 
         # Only order by 'madeAt' (descending), fetch all for post-filtering and limiting
         query = query.order_by("madeAt", direction=firestore.Query.DESCENDING)
+        #query._all_descendants = True
         transactions = query.stream()
 
         results = []
+        stored_transactions = []
         for transaction in transactions:
             value = transaction.to_dict()
             # Add the transaction ID to the raw data for consistency
             value["id"] = value.get("path", {}).get("transaction", "")
-            if resolve_category:
+            category_id = value.get("category", None)
+            if resolve_category and category_id is not None:
                 # Resolve category ID to category name
-                category_id = value.get("category", None)
-                category_name = self.category_name_map.get(category_id, None)
-                if category_name is None:
-                    logger.warning(f"Category ID {category_id} not found in category_name_map, using None.")
-                
-            if resolve_labels:
-                value["labels"] = self._get_transation_labels(wallet_id, value["id"], resolve_names=True)
-            if not self._matches_filters(value, filters):
+                value["category"] = self.category_name_map.get(category_id, None)
+            stored_transactions.append(value)
+
+        labels_query = self.client.collection_group('transactionLabels')
+        labels_query = labels_query.where(filter=FieldFilter("path.user", "==", self.user_id))
+        transactionLabels = [x.to_dict() for x in labels_query.stream()]
+
+        for transaction in stored_transactions:
+            transaction["labels"] = [
+                self.label_name_map.get(x.get('label'), None) if resolve_labels else x.get('label')
+                for x in transactionLabels
+                if x.get('path', {}).get('transaction') == transaction.get('id')
+            ]
+
+            if not self._matches_filters(transaction, filters):
                 continue
-            results.append(value)
-            if len(results) >= limit:
+            results.append(transaction)
+            if limit and len(results) >= limit:
                 break
 
         logger.info(f"Found {len(results)} raw transactions.")
@@ -455,9 +468,19 @@ class SpendeeFirestore(FirebaseClient):
         List transactions for a wallet, filtered by date range and dynamic filters.
 
         Results are always sorted by 'madeAt' in descending order (most recent transactions first).
-        Each returned item has the same fields as get_transaction: id, note, madeAt, category (name), type, isPending, amount.
+        Each returned item has the same fields as get_transaction: id, note, madeAt, category (name), isPending, type, amount, labels.
         Optionally, the returned fields can be limited by the 'fields' parameter, default is ["note", "madeAt", "category", "amount"].
         Category IDs are automatically resolved to category names.
+
+        Fields of a transaction (no other fields are supported!):
+        - id (str): UUID of the transaction
+        - note (str): Transaction note/description
+        - madeAt (str): ISO 8601 timestamp of when the transaction was made
+        - category (str): Category name
+        - isPending (bool): Whether the transaction is pending
+        - type (str): Wether the transactions is one of "regular" or "transfer" (across wallets, or out-of-spendee).
+        - amount (int): Amount of the transaction in the wallet's currency
+        - labels (list): List of label names associated with the transaction. Not supported in filters.
 
         Args:
             wallet_id (str): UUID of the wallet.
@@ -465,8 +488,8 @@ class SpendeeFirestore(FirebaseClient):
             end (str, optional): End date (ISO 8601).
             filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
                 The 'field' and 'op' values must be strings.
-                Supported operators: "=", "~=", ">", ">=", "<", "<=", where "~=" is regex match.
-                Does not support filtering by labels.
+                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
+                If not provided, use an empty list.
             limit (int, optional): Max number of transactions to return (default 20).
             fields (list, optional): List of field names to include in the result. Only supported fields are allowed.
             as_json (bool, optional): Return as JSON string if True.
@@ -509,6 +532,34 @@ class SpendeeFirestore(FirebaseClient):
 
         logger.info(f"Found {len(results)} transactions.")
         return self.as_json(results) if as_json else results
+
+    @mcp_tool
+    def aggregate_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = []) -> float:
+        """
+        Aggregate transactions for a wallet, filtered by date range and dynamic filters.
+        Returns the total sum of amounts of the matching transactions.
+
+        Args:
+            wallet_id (str): UUID of the wallet.
+            start (str): Start date (ISO 8601, required).
+            end (str, optional): End date (ISO 8601).
+            filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
+                The 'field' and 'op' values must be strings.
+                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
+                If not provided, use an empty list.
+        Returns:
+            int: The total sum of amounts of the matching transactions.
+        """
+        logger.info(f"Aggregating transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}")
+
+        # Get raw transactions first
+        raw_transactions = self.list_transactions(wallet_id, start, end, filters, limit=None, fields=["amount"], as_json=False)
+
+        # Sum the amounts
+        total_amount = sum(float(tx.get("amount", 0)) for tx in raw_transactions)
+
+        logger.info(f"Total aggregated amount: {total_amount}")
+        return total_amount
 
     def _get_transation_labels(self, wallet_id: str, transaction_id: str, resolve_names: bool = True, as_json: bool = False):
         """
