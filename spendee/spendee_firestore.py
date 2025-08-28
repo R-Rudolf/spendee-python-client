@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Union, Any
 from google.auth.credentials import Credentials
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -189,24 +189,26 @@ class SpendeeFirestore(FirebaseClient):
     
 
     @mcp_tool
-    def list_categories(self, as_json: bool = False):
+    def list_categories(self) -> List[Dict[str, Any]]:
         """
         Returns the list of categories of the user.
-        If as_json is True, returns the data as a JSON string.
 
         Each category has the fields: id, name, type
         where type can be 'income' or 'expense'
+        
+        Returns:
+            Union[str, List[Dict[str, Any]]]: List of categories or JSON string if as_json=True
         """
         logger.info("Listing categories.")
         data = []
         for raw_data in self.client.collection(f'users/{self.user_id}/categories').get():
             data.append({
-                'id': raw_data.get('path').get('category'),
-                'name': raw_data.get('name'),
-                'type': raw_data.get('type'),
+                'id': str(raw_data.get('path').get('category')),
+                'name': str(raw_data.get('name')),
+                'type': str(raw_data.get('type')),
             })
         logger.debug(f"Fetched categories content: {data}")
-        return self.as_json(data) if as_json else data
+        return data
 
 
     def _list_raw_labels(self, as_json: bool = False):
@@ -220,10 +222,9 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def list_labels(self, as_json: bool = False) -> list[Dict[str, str]]:
+    def list_labels(self) -> List[Dict[str, str]]:
         """
         Returns the list of labels used by the user.
-        If as_json is True, returns the data as a JSON string.
 
         Each label item has the fields: id, name
         """
@@ -236,11 +237,11 @@ class SpendeeFirestore(FirebaseClient):
                 'name': raw_data.get('text'),
             })
         logger.debug(f"Fetched labels content: {data}")
-        return self.as_json(data) if as_json else data
+        return data
 
 
     @mcp_tool
-    def get_wallet_balance(self, wallet_id: str, start: str = None, end: str = None):
+    def get_wallet_balance(self, wallet_id: str, start: str = None, end: str = None) -> Decimal:
         """Get the balance of a wallet for a specific timeframe.
         The start and end parameters should be in ISO 8601 format. If not set,
         no filtering is done.
@@ -249,7 +250,7 @@ class SpendeeFirestore(FirebaseClient):
             start (str, optional): Start date in ISO 8601 format.
             end (str, optional): End date in ISO 8601 format.
         Returns:
-            int: The balance of the wallet.
+            Decimal: The balance of the wallet.
         """
 
         logger.info(f"Calculating balance for wallet_id: {wallet_id}")
@@ -284,7 +285,7 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def list_wallets(self):
+    def list_wallets(self) -> List[Dict[str, Any]]:
         """List all wallets for the authenticated user. This is required before wallet related calls, to have exact string for names.
         Each wallet is represented by an object with the following fields:
         - id: Unique identifier of the wallet
@@ -292,6 +293,9 @@ class SpendeeFirestore(FirebaseClient):
         - type: Type of the wallet (e.g., cash, bank, etc.)
         - currency: Currency of the wallet
         - updatedAt: Last updated timestamp of the wallet
+        
+        Returns:
+            List[Dict[str, Any]]: List of wallet dictionaries
         """
 
         # Fetch raw wallet documents (use helper to allow reuse)
@@ -357,16 +361,15 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def get_transaction(self, wallet_id: str, transaction_id: str, resolve_category: bool = True, resolve_labels: bool = True, as_json: bool = False):
+    def get_transaction(self, wallet_id: str, transaction_id: str, resolve_category: bool = True, resolve_labels: bool = True) -> Dict[str, Any]:
         """Get a specific transaction by its ID from a wallet.
         Args:
             wallet_id (str): UUID of the wallet.
             transaction_id (str): UUID of the transaction.
             resolve_category (bool, optional): If True, resolves the category to name.
             resolve_labels (bool, optional): If True, resolves the labels to names.
-            as_json (bool, optional): If True, returns the data as a JSON string.
         Returns:
-            dict or str: The transaction data, either as a dictionary or JSON string.
+            Dict[str, Any]: The transaction data as a dictionary.
         """
         value = self._get_raw_transaction(wallet_id, transaction_id)
         category_id = value.get("category", "")
@@ -388,7 +391,7 @@ class SpendeeFirestore(FirebaseClient):
         }
 
         logger.info(f"Getting transaction: wallet_id={wallet_id}, transaction_id={transaction_id}")
-        return data if not as_json else self.as_json(data)
+        return data
 
 
     def _list_raw_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, resolve_labels: bool = True, resolve_category: bool = True, as_json: bool = False):
@@ -462,8 +465,7 @@ class SpendeeFirestore(FirebaseClient):
                           end: str = None,
                           filters: list = None,
                           limit: int = 20,
-                          fields: list = ["note", "madeAt", "category", "amount", "labels"],
-                          as_json: bool = False):
+                          fields: list = ["note", "madeAt", "category", "amount", "labels"]) -> List[Dict[str, Any]]:
         """
         List transactions for a wallet, filtered by date range and dynamic filters.
 
@@ -492,9 +494,8 @@ class SpendeeFirestore(FirebaseClient):
                 If not provided, use an empty list.
             limit (int, optional): Max number of transactions to return (default 20).
             fields (list, optional): List of field names to include in the result. Only supported fields are allowed.
-            as_json (bool, optional): Return as JSON string if True.
         Returns:
-            list or str: List of transaction dicts or JSON string.
+            List[Dict[str, Any]]: List of transaction dictionaries.
         """
         logger.info(f"Listing transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}, limit={limit}")
         
@@ -507,7 +508,7 @@ class SpendeeFirestore(FirebaseClient):
             raise ValueError(f"Unsupported fields requested: {unsupported}")
 
         # Get raw transactions first
-        raw_transactions = self._list_raw_transactions(wallet_id, start, end, filters, limit, resolve_category=True, resolve_labels=True, as_json=False)
+        raw_transactions = self._list_raw_transactions(wallet_id, start, end, filters, limit, resolve_category=True, resolve_labels=True)
         
         # Process raw transactions to resolve category IDs and apply field filtering
         results = []
@@ -531,7 +532,7 @@ class SpendeeFirestore(FirebaseClient):
             results.append(data)
 
         logger.info(f"Found {len(results)} transactions.")
-        return self.as_json(results) if as_json else results
+        return results
 
     @mcp_tool
     def aggregate_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = []) -> float:
@@ -548,12 +549,12 @@ class SpendeeFirestore(FirebaseClient):
                 Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
                 If not provided, use an empty list.
         Returns:
-            int: The total sum of amounts of the matching transactions.
+            float: The total sum of amounts of the matching transactions.
         """
         logger.info(f"Aggregating transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}")
 
         # Get raw transactions first
-        raw_transactions = self.list_transactions(wallet_id, start, end, filters, limit=None, fields=["amount"], as_json=False)
+        raw_transactions = self.list_transactions(wallet_id, start, end, filters, limit=None, fields=["amount"])
 
         # Sum the amounts
         total_amount = sum(float(tx.get("amount", 0)) for tx in raw_transactions)
@@ -576,7 +577,7 @@ class SpendeeFirestore(FirebaseClient):
         return self.as_json(labels) if as_json else labels
 
     @mcp_tool
-    def edit_transaction(self, wallet_id: str, transaction_id: str, updates: dict):
+    def edit_transaction(self, wallet_id: str, transaction_id: str, updates: Dict[str, Any]) -> None:
         """
         Edit a specific transaction by its ID from a wallet.
         
@@ -589,6 +590,9 @@ class SpendeeFirestore(FirebaseClient):
                 - labels (str): A single string containing comma-separated operations where each
                     element starts with '+' to add or '-' to remove a label. Example: "+McDonalds,-Rossmann".
                     Labels must already exist for the user; unknown label names will raise ValueError.
+        
+        Returns:
+            None: Operation completes successfully or raises ValueError on error
         Raises:
             ValueError: If the transaction does not exist, or if invalid updates are provided.
         """
@@ -691,6 +695,5 @@ class SpendeeFirestore(FirebaseClient):
         update_data['updatedAt'] = firestore.SERVER_TIMESTAMP
         batch.set(doc_ref, update_data, merge=True)
 
-        batch.update
         batch.commit()
 
