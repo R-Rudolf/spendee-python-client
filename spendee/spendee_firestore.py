@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Callable, Dict, List, Union, Any
+from typing import Callable, Dict, List, Union, Any, Optional, Literal
 from google.auth.credentials import Credentials
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -10,6 +10,7 @@ import datetime
 import logging
 import re
 import uuid
+from pydantic import BaseModel
 
 # Improvement ideas:
 # - Implement token expiration check in CustomFirebaseCredentials
@@ -28,6 +29,17 @@ MCP_TOOLS: Dict[str, Callable] = {}
 def mcp_tool(func: Callable) -> Callable:
     MCP_TOOLS[func.__name__] = func
     return func
+
+
+class Category(BaseModel):
+    id: str
+    name: str
+    type: Literal['income', 'expense']
+
+class Label(BaseModel):
+    id: str
+    name: str
+
 
 class CustomFirebaseCredentials(Credentials):
     """Custom credentials that use existing Firebase access token"""
@@ -72,9 +84,9 @@ class SpendeeFirestore(FirebaseClient):
         # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
         categories = self.list_categories()
-        self.category_name_map = { x['id']: x['name'] for x in categories}
-        self.category_type_map = { x['id']: x['type'] for x in categories}
-        self.label_name_map = { x['id']: x['name'] for x in self.list_labels()}
+        self.category_name_map = { x.id: x.name for x in categories}
+        self.category_type_map = { x.id: x.type for x in categories}
+        self.label_name_map = { x.id: x.name for x in self.list_labels()}
         logger.info(f"SpendeeFirestore initialized for user_id={self.user_id}, email={self.email}")
 
     def _token_refresh(self):
@@ -126,40 +138,97 @@ class SpendeeFirestore(FirebaseClient):
         return json.dumps(obj, indent=2, default=self._json_serializer, ensure_ascii=False)
 
     @staticmethod
-    def _matches_filters(value, filters):
-        for f in filters or []:
-            if "field" not in f or "op" not in f or "value" not in f:
-                raise ValueError(f"Invalid filter format: {f}")
-            field = f.get("field")
-            op = f.get("op")
-            filter_value = f.get("value")
+    def _matches_filters(value: Dict, filters: Dict[str,Union[str,float]]) -> bool:
+        """
+        Evaluate filters provided as a dict with keys like "field__suffix": value.
+
+        Supported suffixes: __eq, __regex, __gt, __gte, __lt, __lte, __contains, __not_contains
+        Example: {"amount__gte": 100, "note__regex": "[mM][cC][dD]"}
+        """
+        if not filters:
+            return True
+
+        if not isinstance(filters, dict):
+            raise ValueError("filters must be a dict of the form {'field__op': value}")
+
+        supported_suffixes = {
+            "__eq",
+            "__regex",
+            "__gt",
+            "__gte",
+            "__lt",
+            "__lte",
+            "__contains",
+            "__not_contains",
+        }
+
+        for key, filter_value in filters.items():
+            if not isinstance(key, str):
+                raise ValueError(f"Filter key must be a string: {key}")
+
+            # split into field and suffix
+            if "__" not in key:
+                raise ValueError(f"Invalid filter key format (expected 'field__op'): {key}")
+            field, suffix = key.split("__", 1)
+            suffix = f"__{suffix}"
+            if suffix not in supported_suffixes:
+                raise ValueError(f"Unsupported filter operation suffix: {suffix} in {key}")
+
             v = value.get(field)
-            if op == "array-contains":
-                if field != "labels":
-                    raise ValueError("array-contains operator is only supported for 'labels' field")
-                if filter_value not in v:
+
+            # Unified "contains" and "not contains" for both lists and strings
+            if suffix in ("__contains", "__not_contains"):
+                if not v:
+                    # For __contains, missing value means no match; for __not_contains, treat as not present
+                    if suffix == "__contains":
+                        return False
+                # Accept str or list-like (tuple, set)
+                if not isinstance(v, (str, list, tuple, set)):
+                    raise ValueError(f"Field '{field}' value must be str or list-like for '{suffix}' filter, got {type(v)}")
+                contains = filter_value in v
+                if suffix == "__contains" and not contains:
                     return False
-            elif op == ">":
-                if not (v is not None and float(v) > float(filter_value)):
+                if suffix == "__not_contains" and contains:
                     return False
-            elif op == ">=":
-                if not (v is not None and float(v) >= float(filter_value)):
+            # Regex match
+            elif suffix == "__regex":
+                if not v:
                     return False
-            elif op == "<":
-                if not (v is not None and float(v) < float(filter_value)):
+                if not re.search(str(filter_value), str(v)):
                     return False
-            elif op == "<=":
-                if not (v is not None and float(v) <= float(filter_value)):
+            # Equality
+            elif suffix == "__eq":
+                # If both values are numbers, allow a small error margin (epsilon)
+                try:
+                    left = float(v)
+                    right = float(filter_value)
+                    epsilon = 1e-4
+                    if abs(left - right) > epsilon:
+                        return False
+                except (ValueError, TypeError):
+                    if not (str(v) == str(filter_value)):
+                        return False
+            # Numeric comparisons - try to cast to float
+            elif suffix in ("__gt", "__gte", "__lt", "__lte"):
+                if not v:
                     return False
-            elif op == "=":
-                if not (str(v) == str(filter_value)):
+                try:
+                    left = float(v)
+                    right = float(filter_value)
+                except Exception:
                     return False
-            elif op == "~=":
-                if not (v is not None and re.search(str(filter_value), str(v))):
+                if suffix == "__gt" and not (left > right):
+                    return False
+                if suffix == "__gte" and not (left >= right):
+                    return False
+                if suffix == "__lt" and not (left < right):
+                    return False
+                if suffix == "__lte" and not (left <= right):
                     return False
             else:
-                logger.warning(f"Unsupported filter op: {op}")
-                return False
+                # Shouldn't reach here because we validated suffixes above
+                raise ValueError(f"Unhandled filter suffix: {suffix}")
+
         return True
 
     # --- Spendee API methods ---
@@ -189,7 +258,7 @@ class SpendeeFirestore(FirebaseClient):
     
 
     @mcp_tool
-    def list_categories(self) -> List[Dict[str, Any]]:
+    def list_categories(self) -> List[Category]:
         """
         Returns the list of categories of the user.
 
@@ -202,11 +271,11 @@ class SpendeeFirestore(FirebaseClient):
         logger.info("Listing categories.")
         data = []
         for raw_data in self.client.collection(f'users/{self.user_id}/categories').get():
-            data.append({
-                'id': str(raw_data.get('path').get('category')),
-                'name': str(raw_data.get('name')),
-                'type': str(raw_data.get('type')),
-            })
+            data.append(Category(
+                id=str(raw_data.get('path').get('category')),
+                name=str(raw_data.get('name')),
+                type=str(raw_data.get('type')),
+            ))
         logger.debug(f"Fetched categories content: {data}")
         return data
 
@@ -222,7 +291,7 @@ class SpendeeFirestore(FirebaseClient):
 
 
     @mcp_tool
-    def list_labels(self) -> List[Dict[str, str]]:
+    def list_labels(self) -> List[Label]:
         """
         Returns the list of labels used by the user.
 
@@ -231,24 +300,21 @@ class SpendeeFirestore(FirebaseClient):
         logger.info("Listing labels.")
         data = []
         for raw_data in self.client.collection(f'users/{self.user_id}/labels').get():
-            data.append({
-                'id': raw_data.get('path').get('label'),
-                # attention: here I switch from fieldName 'text' to 'name', for consistency with categories
-                'name': raw_data.get('text'),
-            })
+            data.append(Label(
+                id=raw_data.get('path').get('label'),
+                name=raw_data.get('text'),
+            ))
         logger.debug(f"Fetched labels content: {data}")
         return data
 
 
     @mcp_tool
-    def get_wallet_balance(self, wallet_id: str, start: str = None, end: str = None) -> Decimal:
-        """Get the balance of a wallet for a specific timeframe.
-        The start and end parameters should be in ISO 8601 format. If not set,
-        no filtering is done.
+    def get_wallet_balance(self, wallet_id: str, date: str = "") -> Decimal:
+        """Get the balance of a wallet on the given date.
+        The date parameter should be in ISO 8601 format.
         Args:
             wallet_id (str): Name of the wallet. (Should be equal to the results of list_wallets call)
-            start (str, optional): Start date in ISO 8601 format.
-            end (str, optional): End date in ISO 8601 format.
+            date (str, optional): Date in ISO 8601 format.
         Returns:
             Decimal: The balance of the wallet.
         """
@@ -256,14 +322,10 @@ class SpendeeFirestore(FirebaseClient):
         logger.info(f"Calculating balance for wallet_id: {wallet_id}")
         query = self.client.collection(f'users/{self.user_id}/wallets/{wallet_id}/transactions')
 
-        if start:
-            query = query.where(filter=FieldFilter("madeAt", ">=", datetime.datetime.fromisoformat(start)))
-            starting_balance = 0
-        else:
-            starting_balance = self.client.document(f'users/{self.user_id}/wallets/{wallet_id}').get().to_dict()['startingBalance']
+        starting_balance = self.client.document(f'users/{self.user_id}/wallets/{wallet_id}').get().to_dict()['startingBalance']
 
-        if end:
-            query = query.where(filter=FieldFilter("madeAt", "<=", datetime.datetime.fromisoformat(end)))
+        if date:
+            query = query.where(filter=FieldFilter("madeAt", "<=", datetime.datetime.fromisoformat(date)))
         query = query.order_by("madeAt")
         transactions = query.stream()
         # Could not use aggregation queries here, because each transaction has a different exchange rate, which needs multiplication.
@@ -272,13 +334,14 @@ class SpendeeFirestore(FirebaseClient):
         total = 0
         for transaction in transactions:
             data = transaction.to_dict()
-            usd_value = data.get('usdValue', {})
+            # usd_value = data.get('usdValue', {})
 
-            amount = Decimal(str(usd_value.get('amount', '0')))
-            exchange_rate = Decimal(str(usd_value.get('exchangeRate', '0')))
+            # amount = Decimal(str(usd_value.get('amount', '0')))
+            # exchange_rate = Decimal(str(usd_value.get('exchangeRate', '0')))
 
-            converted_value = amount * exchange_rate
-            total += converted_value
+            # converted_value = amount * exchange_rate
+            #total += converted_value
+            total += Decimal(str(data.get('amount', '0')))
         
         logger.info(f"Total balance calculated: {total + Decimal(str(starting_balance))}")
         return round(total + Decimal(str(starting_balance)))
@@ -394,7 +457,7 @@ class SpendeeFirestore(FirebaseClient):
         return data
 
 
-    def _list_raw_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = None, limit: int = 20, resolve_labels: bool = True, resolve_category: bool = True, as_json: bool = False):
+    def _list_raw_transactions(self, wallet_id: str, start: str, end: str = "", filters: Optional[Dict[str,Union[str,float]]] = {}, limit: int = 20, resolve_labels: bool = True, resolve_category: bool = True, as_json: bool = False):
         """
         List raw transactions for a wallet, filtered by date range and dynamic filters.
         
@@ -405,9 +468,10 @@ class SpendeeFirestore(FirebaseClient):
             wallet_id (str): UUID of the wallet.
             start (str): Start date (ISO 8601, required).
             end (str, optional): End date (ISO 8601).
-            filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
-                The 'field' and 'op' values must be strings.
-                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
+            filters (list, optional): List of filter dicts, e.g. [{"amount__gte": 100}].
+                The field__op keys must be strings, and value can be str or float.
+                Supported suffixes: "__eq", "__regex", "__gt", "__gte", "__lt", "__lte", "__contains", "__not_contains".
+                Where "__regex" is regex match and "__contains", "__not_contains" is for string only.
             limit (int, optional): Max number of transactions to return (default 20).
             as_json (bool, optional): Return as JSON string if True.
         Returns:
@@ -452,7 +516,7 @@ class SpendeeFirestore(FirebaseClient):
             if not self._matches_filters(transaction, filters):
                 continue
             results.append(transaction)
-            if limit and len(results) >= limit:
+            if (limit or limit != 0) and len(results) >= limit:
                 break
 
         logger.info(f"Found {len(results)} raw transactions.")
@@ -462,10 +526,10 @@ class SpendeeFirestore(FirebaseClient):
     def list_transactions(self,
                           wallet_id: str,
                           start: str,
-                          end: str = None,
-                          filters: list = None,
-                          limit: int = 20,
-                          fields: list = ["note", "madeAt", "category", "amount", "labels"]) -> List[Dict[str, Any]]:
+                          end: Optional[str] = "",
+                          filters: Optional[Dict[str,Union[str,float]]] = {},
+                          limit: Optional[int] = 20,
+                          fields: Optional[list[str]] = ["note", "madeAt", "category", "amount", "labels"]) -> List[Dict[str, Any]]:
         """
         List transactions for a wallet, filtered by date range and dynamic filters.
 
@@ -482,16 +546,16 @@ class SpendeeFirestore(FirebaseClient):
         - isPending (bool): Whether the transaction is pending
         - type (str): Wether the transactions is one of "regular" or "transfer" (across wallets, or out-of-spendee).
         - amount (int): Amount of the transaction in the wallet's currency
-        - labels (list): List of label names associated with the transaction. Not supported in filters.
+        - labels (str): List of label names associated with the transaction joined by commas into a string, orderd alphabetically.
 
         Args:
             wallet_id (str): UUID of the wallet.
             start (str): Start date (ISO 8601, required).
             end (str, optional): End date (ISO 8601).
-            filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
-                The 'field' and 'op' values must be strings.
-                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
-                If not provided, use an empty list.
+            filters (list, optional): List of filter dicts, e.g. [{"amount__gte": 100}].
+                The field__op keys must be strings, and value can be str or float.
+                Supported suffixes: "__eq", "__regex", "__gt", "__gte", "__lt", "__lte", "__contains", "__not_contains".
+                Where "__regex" is regex match and "__contains", "__not_contains" is for string only.
             limit (int, optional): Max number of transactions to return (default 20).
             fields (list, optional): List of field names to include in the result. Only supported fields are allowed.
         Returns:
@@ -516,7 +580,7 @@ class SpendeeFirestore(FirebaseClient):
             # Create processed transaction data matching get_transaction output fields
             data = {
                 "id": raw_transaction.get("id", ""),
-                "labels": raw_transaction.get("labels", []),
+                "labels": ",".join(sorted(raw_transaction.get("labels", []))),
                 "note": raw_transaction.get("note", ""),
                 "madeAt": raw_transaction.get("madeAt", ""),
                 "category": raw_transaction.get("category", ""),
@@ -535,26 +599,34 @@ class SpendeeFirestore(FirebaseClient):
         return results
 
     @mcp_tool
-    def aggregate_transactions(self, wallet_id: str, start: str, end: str = None, filters: list = []) -> float:
+    def aggregate_transactions(self, wallet_id: str, start: str, end: str = "", filters: Optional[Dict[str,Union[str,float]]] = {}) -> float:
         """
         Aggregate transactions for a wallet, filtered by date range and dynamic filters.
         Returns the total sum of amounts of the matching transactions.
+
+        Example call:
+            aggregate_transactions(
+                wallet_id="3fcc0060-d3f2-42fb-9001-9a467f95d1b0",
+                start="2023-01-01",
+                end="2023-12-31",
+                filters={"amount__gte": 100}
+            )
 
         Args:
             wallet_id (str): UUID of the wallet.
             start (str): Start date (ISO 8601, required).
             end (str, optional): End date (ISO 8601).
-            filters (list, optional): List of filter dicts, e.g. [{"field": "amount", "op": ">=", "value": 100}].
-                The 'field' and 'op' values must be strings.
-                Supported operators: "=", "~=", ">", ">=", "<", "<=", "array-contains", where "~=" is regex match and "array-contains" is for labels only.
-                If not provided, use an empty list.
+            filters (list, optional): List of filter dicts, e.g. {"amount__gte": 100}.
+                The field__op keys must be strings, and value can be str or float.
+                Supported suffixes: "__eq", "__regex", "__gt", "__gte", "__lt", "__lte", "__contains", "__not_contains".
+                Where "__regex" is regex match and "__contains", "__not_contains" is for string only.
         Returns:
             float: The total sum of amounts of the matching transactions.
         """
         logger.info(f"Aggregating transactions for wallet_id={wallet_id}, start={start}, end={end}, filters={filters}")
 
         # Get raw transactions first
-        raw_transactions = self.list_transactions(wallet_id, start, end, filters, limit=None, fields=["amount"])
+        raw_transactions = self.list_transactions(wallet_id, start, end, filters, limit=0, fields=["amount"])
 
         # Sum the amounts
         total_amount = sum(float(tx.get("amount", 0)) for tx in raw_transactions)
