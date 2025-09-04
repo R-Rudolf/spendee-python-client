@@ -24,9 +24,9 @@ if [ -z "${1:-}" ] || [ $1 == "run" ]; then
         -p 6277:6277 \
         -e BASE_URL="http://0.0.0.0:6274" \
         -e HOST=0.0.0.0 \
-        -e 'ALLOWED_ORIGINS=http://0.0.0.0:6274,http://localhost:6274,http://127.0.0.1:6274' \
+        -e 'ALLOWED_ORIGINS=*' \
         -e 'DEBUG=*' \
         -e LOG_LEVEL=debug \
         -e DANGEROUSLY_OMIT_AUTH=true \
-        inspector
+        inspector "$@"
 fi

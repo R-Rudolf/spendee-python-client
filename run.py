@@ -29,11 +29,6 @@ if not EMAIL or not PASSWORD:
 
 # spendee = SpendeeApi(EMAIL, PASSWORD)
 
-# accounts = spendee.wallet_get_all()
-# print('Available accounts:')
-# for acc in accounts:
-#     print(f"- {acc.get('name', 'Unnamed')} (ID: {acc.get('id')}, Balance: {acc.get('balance')} {acc.get('currency')})")
-
 spendee = SpendeeFirestore(EMAIL, PASSWORD)
 
 
@@ -42,31 +37,24 @@ print("Raiffeisen Étkezés sum in 2025.08: " + str(spendee.aggregate_transactio
     start='2025-08-01T00:00:00Z',
     end='2025-08-31T23:59:59Z',
     filters=[{"field": "category", "op": "=", "value": "Étkezés"}],
-)))
+)))# -30000 < x < -180000
 
 print("Raiffeisen Szigetspicc label sum in 2025.08: " + str(spendee.aggregate_transactions(
     wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
     start='2025-08-01T00:00:00Z',
     end='2025-08-31T23:59:59Z',
     filters=[{"field": "labels", "op": "array-contains", "value": "szigetspicc"}],
-)))
+))) # -50000 < x < -60000
 
-#print(spendee.list_labels(as_json=True))
-#print(spendee.list_categories(as_json=True))
+
 #print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'a15d8379-6884-4e7d-a007-a1748b62e9d3', as_json=True))
 #print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
-# Example raw document dumps using the new helper. Paste these outputs back here to expand the schema.
 
+# Example raw document dumps using the new helper. Paste these outputs back here to expand the schema.
 #print(spendee._get_raw_document(f"users/{spendee.user_id}", as_json=True))
 
-#print(spendee._list_raw_wallets(as_json=True))
-
-
-#print("listwallets: ", spendee.list_wallets())
+# ---
 #print("rafi balance: ", spendee.get_wallet_balance('Rafi'))
-# for wallet in wallets:
-#     print(wallet['name'])
-#     print(spendee.get_wallet_balance(wallet['id'], start='2025-07-02T00:00:00Z'))
 
 #print(spendee.list_transactions('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', start='2025-08-01T00:00:00Z', filters=[{"field": "amount", "op": ">=", "value": 5000}], as_json=True))
 #print(spendee.list_transactions('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', start='2025-08-01T00:00:00Z', filters=[{"field": "note", "op": "~=", "value": "GYED"}], as_json=True))
@@ -92,8 +80,6 @@ print("Raiffeisen Szigetspicc label sum in 2025.08: " + str(spendee.aggregate_tr
 #         'category': "Szórakozás"
 #     }
 # )
-# print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2', as_json=True))
-#print(spendee.get_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', '875ebb1c-e03d-433f-a6c9-be0316f6c838', as_json=True))
 #print(spendee._get_transation_labels('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', '875ebb1c-e03d-433f-a6c9-be0316f6c838', as_json=True))
 
 # print(spendee.list_transactions('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', start='2025-08-01T00:00:00Z', filters=[{"field": "category", "op": "=", "value": None}], fields=["id", "note", "category"], as_json=True))

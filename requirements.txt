@@ -8,7 +8,12 @@ jwt
 # mcp
 mcp[cli]
 fastapi
+fastmcp
 
 # tests
 pytest
+pytest-asyncio
 python-dotenv
+
+# agent
+mcp-agent
