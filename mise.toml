@@ -1,0 +1,7 @@
+[tools]
+python = "3.11"
+jq = "latest"
+bws = "npm:@bitwarden/cli"
+
+[env]
+BWS_ACCESS_TOKEN = { source = "bws", secret = "BWS_ACCESS_TOKEN" }
