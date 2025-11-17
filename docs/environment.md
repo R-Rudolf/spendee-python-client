@@ -14,7 +14,4 @@ This project uses [mise](https://mise.jdx.dev/) to manage the development enviro
     ```
 
 ## Tools
-This project uses the following tools, which are managed by `mise`:
-*   **Python 3.11**
-*   **jq**: A command-line JSON processor.
-*   **Bitwarden CLI**: The command-line interface for Bitwarden.
+This project uses several tools that are managed by `mise`. For a complete and up-to-date list of these tools, please refer to the `.mise.toml` file in the root of the repository.

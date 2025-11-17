@@ -4,9 +4,6 @@ This is a Python client for interfacing with the wonderful [Spendee app](https:/
 
 The codebase was forked from [dionysio/spendee](https://github.com/dionysio/spendee) (many thanks! <3) in 2025, which was authored in 2019-2020 and archived since then.
 
-About Spendee:
-> Spendee.com is a budget and expense tracker application to manage personal finances. It allows users to connect bank accounts, e-wallets, and crypto wallets to get an aggregated overview of their financial situation. The app helps users organize and analyze spending through automatic transaction categorization, visually appealing graphs, and insights.
-
 ## ⚠️ Warning
 
 This is a work in progress and is not recommended for general use yet. The original Spendee API is undocumented, and while this client works at the time of writing, it might stop working at any time. The author is not associated with Spendee in any way.
@@ -15,28 +12,15 @@ This is a work in progress and is not recommended for general use yet. The origi
 
 ## For Users
 
-To set up a development environment (only linux is documented):
+*This section is for people who want to use the `spendee-python-client` library in their own projects.*
 
-1. Ensure you have Python 3.11+ installed.
-2. Setup the virtual environment:
-    ```bash
-    # Create a virtual environment
-    python3 -m venv .venv
-    # Activate the virtual environment
-    source .venv/bin/activate
-    # Install dependencies
-    pip install -r requirements.txt
-    ```
-3. Set credentials in a newly created `.env` file.
-   ```bash
-   echo 'EMAIL=<email>' > .env
-   echo 'PASSWORD=<password' >> .env
-   ```
-4. Adapt `run.py` for your experiment and execute.
+_(Coming soon)_
 
 ---
 
 ## For Developers & Contributors
+
+*This section is for people who want to contribute to the development of this library.*
 
 ### Development Environment Setup
 
@@ -48,7 +32,16 @@ This project uses [mise](https://mise.jdx.dev/) to manage the development enviro
 
 3.  **Install Tools**: Once `mise` is activated, navigate to the project's root directory and run `mise install` to install the required tools.
 
-4. **Follow the User guide** above.
+4.  **Set Credentials**: Create a `.env` file in the project root and add your Spendee credentials:
+    ```bash
+    echo 'EMAIL=<your-email>' > .env
+    echo 'PASSWORD=<your-password>' >> .env
+    ```
+
+5.  **Run**: You can now run the `run.py` script to experiment with the library:
+    ```bash
+    python run.py
+    ```
 
 ### Backstory and Roadmap
 

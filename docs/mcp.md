@@ -8,6 +8,11 @@ MCP (Model Context Protocol) is an open-source standard for connecting AI applic
 *   **Clients:** Connect to MCP servers to access data and tools.
 *   **Transports:** The underlying communication mechanism between clients and servers.
 
+## Authentication and Authorization
+The MCP server in this project uses a simple bearer token authentication mechanism. It does not implement OAuth or any other complex authentication schemes.
+
+To authenticate with the server, you must provide a bearer token in the `Authorization` header of your requests. The server expects the token to be the value of the `MCP_TOKEN` environment variable.
+
 ## MCP Inspector
 The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is an interactive developer tool for testing and debugging MCP servers. It allows you to:
 *   Inspect available resources, prompts, and tools.
@@ -20,4 +25,4 @@ The `inspect2.sh` script in this repository is designed to help you run the MCP 
 For a deeper understanding of MCP, please refer to the [official documentation](https://modelcontextprotocol.io/docs/getting-started/intro).
 
 ---
-For implementation details, see `mcp/agents.md`.
+For implementation details, see `spendee/agents.md`.

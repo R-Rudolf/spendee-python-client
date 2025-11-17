@@ -4,13 +4,7 @@
 This document provides AI coding assistants with essential context for working with the spendee-python-client project.
 
 ## Development Environment Setup
-This project uses [mise](https://mise.jdx.dev/) to manage the development environment. To set up your environment, follow these steps:
-
-1.  **Install `mise`**: If you don't have `mise` installed, you can install it by running `curl https://mise.run | sh`.
-2.  **Activate `mise`**: Activate `mise` in your shell by running `eval "$(~/.local/bin/mise activate bash)"`.
-3.  **Install Tools**: Navigate to the project's root directory and run `mise install`. This will install the tools defined in the `.mise.toml` file.
-
-For more detailed instructions, please refer to the [environment setup documentation](docs/environment.md).
+This project uses [mise](https://mise.jdx.dev/) to manage the development environment. For detailed instructions on how to set up the environment, please refer to the [environment setup documentation](docs/environment.md).
 
 ## Secrets Management
 We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set. You can then use the `bws` CLI to fetch secrets.
