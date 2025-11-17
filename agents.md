@@ -7,8 +7,9 @@ This document provides AI coding assistants with essential context for working w
 Please refer to the README.md for instructions on setting up the development environment.
 
 ## Secrets Management
-We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set. You can then use the `bws` CLI to fetch secrets.
-
+We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set (possibly already set). You can then use the `bws` CLI to fetch secrets.
+Sometimes the 'note' field contains useful information about the secret, how to use it, or for which account/project it belongs to.
+,
 **Example: Get a specific secret by key**
 ```bash
 bws secret list | jq -r '.[] | select(.key == "spendee-password") | .value'
@@ -37,3 +38,9 @@ Each agent file starts with a "Read the overview" links block to the relevant `d
 Each relevant `docs/**` page gets a small footer: "For implementation details, see `<path>/agents.md`".
 
 Reduce code/text duplication as much as possible across twin docs and agents files.
+
+# Subordinate pages
+
+Update this file if new agents.md is created.
+
+Currently there are no further agents.md's in this project.
