@@ -21,6 +21,8 @@ echo "Activate Mise environment and install"
 eval "$(~/.local/bin/mise activate bash)"
 mise trust .mise.toml
 mise install
+echo $PATH
+echo ~/.local/share/mise/installs
 
 
 # --- Python virtual environment setup ---
