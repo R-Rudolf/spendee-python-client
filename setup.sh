@@ -19,6 +19,7 @@ fi
 
 echo "Activate Mise environment and install"
 eval "$(~/.local/bin/mise activate bash)"
+mise trust .mise.toml
 mise install
 
 
