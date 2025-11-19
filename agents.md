@@ -20,13 +20,17 @@ bws secret list | jq -r '.[] | .key'
 ```
 
 ## Living Documentation
-Important: The `agents.md` files are living documentation that should be updated alongside code changes. When implementing modifications:
+Important: The `agents.md` files are living documentation that should be updated alongside code changes.
 
+When implementing modifications:
 *   **Update Relevant Agent Files:** Consider which `agents.md` files need updates when making changes. Avoid adding to the root agents.md file and use dedicated directory related agents.md. Only add the the root, when it is really globally applicable, otherwise just reference there.
 *   **Keep Implementation Details Current:** Ensure commands, file paths, and procedures reflect the current state
 *   **Maintain Cross-References:** Update links between agent files and documentation
 *   **File References Only:** Never quote file content in agent files - only reference files by path
 *   **Consistency:** Ensure terminology and patterns remain consistent across all agent files
+
+Even when doing development, testing and troubleshooting, take notes (docs/notes/) at least of the learnings to persist and be recallable later, mentioning them in related docs or agents.md files. But surely high level findings should go to there, not just the links. The goal is to avoid the same mistakes happenning again.
+Whatever you would put into "memory", put them into the docs and agents.md files.
 
 ## Docs/Agents split policy
 *   **Human docs (docs/**):** "What/Why"—architecture, domain flows, decisions, onboarding narratives, high-level troubleshooting flows.
