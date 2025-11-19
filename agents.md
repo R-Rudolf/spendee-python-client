@@ -4,7 +4,7 @@
 This document provides AI coding assistants with essential context for working with the spendee-python-client project.
 
 ## Development Environment Setup
-This project uses [mise](https://mise.jdx.dev/) to manage the development environment. For detailed instructions on how to set up the environment, please refer to the [environment setup documentation](docs/environment.md).
+This project uses [mise](https://mise.jdx.dev/) to manage the development environment and leverages python virtual environment by relying on the [requirements.txt](requirements.txt) file. For details how the environment set up works, look into the [setup.sh](setup.sh) file.
 
 ## Secrets Management
 We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set. You can then use the `bws` CLI to fetch secrets.
@@ -30,6 +30,7 @@ When implementing modifications:
 *   **Consistency:** Ensure terminology and patterns remain consistent across all agent files
 
 Even when doing development, testing and troubleshooting, take notes (docs/notes/) at least of the learnings to persist and be recallable later, mentioning them in related docs or agents.md files. But surely high level findings should go to there, not just the links. The goal is to avoid the same mistakes happenning again.
+
 Whatever you would put into "memory", put them into the docs and agents.md files.
 
 ## Docs/Agents split policy

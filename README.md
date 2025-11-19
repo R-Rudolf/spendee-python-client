@@ -13,42 +13,21 @@ This is a work in progress and is not recommended for general use yet. The origi
 
 ---
 
-## For Users
+## Setup
 
-To set up a development environment (only linux is documented):
+Only linux is documented:
 
-1. Ensure you have Python 3.11+ installed.
-2. Setup the virtual environment:
-    ```bash
-    # Create a virtual environment
-    python3 -m venv .venv
-    # Activate the virtual environment
-    source .venv/bin/activate
-    # Install dependencies
-    pip install -r requirements.txt
-    ```
-3. Set credentials in a newly created `.env` file.
+1. Set credentials in a newly created `.env` file.
    ```bash
    echo 'EMAIL=<email>' > .env
-   echo 'PASSWORD=<password' >> .env
+   echo 'PASSWORD=<password>' >> .env
    ```
-4. Adapt `run.py` for your experiment and execute.
+2. Start the setup script.
+    ```bash
+    ./setup.sh
+    ```
+3. Adapt `run.py` for your experiment and execute.
 
----
-
-## For Developers & Contributors
-
-### Development Environment Setup
-
-This project uses [mise](https://mise.jdx.dev/) to manage the development environment.
-
-1.  **Install `mise`**: Follow the [official installation instructions](https://mise.jdx.dev/getting-started.html#installing-mise-cli) to install `mise` on your system.
-
-2.  **Activate `mise`**: Activate `mise` in your shell by following the instructions for your shell in the [official documentation](https://mise.jdx.dev/getting-started.html#activate-mise).
-
-3.  **Install Tools**: Once `mise` is activated, navigate to the project's root directory and run `mise install` to install the required tools.
-
-4. **Follow the User guide** above.
 
 ### Backstory and Roadmap
 
