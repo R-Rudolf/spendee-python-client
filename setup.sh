@@ -18,11 +18,11 @@ if [ ! -x "$HOME/.local/bin/mise" ]; then
 fi
 
 echo "Activate Mise environment and install"
+~/.local/bin/mise trust .mise.toml
 eval "$(~/.local/bin/mise activate bash)"
-mise trust .mise.toml
 mise install
 echo $PATH
-echo ~/.local/share/mise/installs
+ls -lah ~/.local/share/mise/installs
 
 
 # --- Python virtual environment setup ---
