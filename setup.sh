@@ -19,7 +19,19 @@ fi
 
 echo "Activate Mise environment and install"
 ~/.local/bin/mise trust .mise.toml
-eval "$(~/.local/bin/mise activate bash)"
+# Detect user shell for Mise activation
+if [ -n "${BASH_VERSION:-}" ]; then
+  SHELL_TYPE="bash"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+  SHELL_TYPE="zsh"
+elif [ -n "${FISH_VERSION:-}" ]; then
+  SHELL_TYPE="fish"
+else
+  SHELL_TYPE="sh"
+fi
+
+# Activate Mise environment for detected shell
+eval "$(~/.local/bin/mise activate "$SHELL_TYPE")"
 mise install
 echo $PATH
 ls -lah ~/.local/share/mise/installs
