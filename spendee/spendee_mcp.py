@@ -7,6 +7,7 @@ import hashlib
 import secrets
 
 from mcp.server.fastmcp import FastMCP
+#from fastmcp import FastMCP
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.sse import SseServerTransport
 
@@ -19,6 +20,7 @@ from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
 
 from spendee.spendee_firestore import SpendeeFirestore, MCP_TOOLS
+
 
 # to start (after .venv setup):
 #   python spendee/spendee_mcp.py
@@ -106,6 +108,7 @@ async def check_bearer_auth(request, error_response=None):
 
 
 def streaming_server():
+    # maybe this would be simpler: https://gofastmcp.com/deployment/self-hosted#environment-variables
     session_manager = StreamableHTTPSessionManager(
         app=mcp._mcp_server,
     )

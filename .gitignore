@@ -2,7 +2,7 @@
 __pycache__
 *.pyc
 # Ignore .env files containing secrets
-.env
+*.env
 .venv
 *.egg-info
 *.log
