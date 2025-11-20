@@ -30,28 +30,20 @@ else
   SHELL_TYPE="sh"
 fi
 
-# Activate Mise environment for detected shell
-MISE_TRACE=1
-eval "$(~/.local/bin/mise activate "$SHELL_TYPE")"
-
+# Debug
+if [[ $- == *i* ]]; then
+  #Shell is interactive
+  eval "$(~/.local/bin/mise activate "$SHELL_TYPE")"
+else
+  echo "Shell is not interactive, mise env setup may not fully function, see https://mise.jdx.dev/dev-tools/shims.html#shims-vs-path"
+  eval "$(~/.local/bin/mise activate --shims)"
+fi
 # Fallback preparation
 #mise_installs="${HOME}/.local/share/mise/installs"
 #export PATH="${HOME}/.local/bin:${mise_installs}/python/latest/bin:${mise_installs}/jq/latest:${mise_installs}/bitwarden-secrets-manager/latest:${PATH}"
 
 mise install
 
-# Debug
-if [[ $- == *i* ]]; then
-  echo "Shell is interactive"
-else
-  echo "Shell is not interactive"
-fi
-
-echo $PATH
-ls -lah ~/.local/share/mise/installs
-which bws
-
-eval "$(mise activate --shims)"
 which bws
 
 
