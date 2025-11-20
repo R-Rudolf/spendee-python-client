@@ -31,23 +31,28 @@ else
 fi
 
 # Activate Mise environment for detected shell
+MISE_TRACE=1
 eval "$(~/.local/bin/mise activate "$SHELL_TYPE")"
+
+# Fallback preparation
+#mise_installs="${HOME}/.local/share/mise/installs"
+#export PATH="${HOME}/.local/bin:${mise_installs}/python/latest/bin:${mise_installs}/jq/latest:${mise_installs}/bitwarden-secrets-manager/latest:${PATH}"
+
 mise install
-echo $PATH
-ls -lah ~/.local/share/mise/installs
 
-
-# --- Python virtual environment setup ---
-echo "Create a virtual environment"
-if [ ! -d ".venv" ]; then
-  python3 -m venv .venv
+# Debug
+if [[ $- == *i* ]]; then
+  echo "Shell is interactive"
+else
+  echo "Shell is not interactive"
 fi
 
-echo  "Activate the python virtual environment"
-source .venv/bin/activate
+echo $PATH
+ls -lah ~/.local/share/mise/installs
+which bws
 
-echo "Install dependencies"
-pip install -r requirements.txt
+eval "$(mise activate --shims)"
+which bws
 
 
 # --- Bitwarden credential setup ---
@@ -67,3 +72,16 @@ if [ ! -f ".env" ]; then
   echo "PASSWORD='${PASSWORD}'" > .env
   echo "${EMAIL_LINE}" >> .env
 fi
+
+
+# --- Python virtual environment setup ---
+echo "Create a virtual environment"
+if [ ! -d ".venv" ]; then
+  python3 -m venv .venv
+fi
+
+echo  "Activate the python virtual environment"
+source .venv/bin/activate
+
+echo "Install dependencies"
+pip install -r requirements.txt
