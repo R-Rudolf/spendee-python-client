@@ -30,7 +30,6 @@ else
   SHELL_TYPE="sh"
 fi
 
-# Debug
 if [[ $- == *i* ]]; then
   #Shell is interactive
   eval "$(~/.local/bin/mise activate "$SHELL_TYPE")"
@@ -38,13 +37,8 @@ else
   echo "Shell is not interactive, mise env setup may not fully function, see https://mise.jdx.dev/dev-tools/shims.html#shims-vs-path"
   eval "$(~/.local/bin/mise activate --shims)"
 fi
-# Fallback preparation
-#mise_installs="${HOME}/.local/share/mise/installs"
-#export PATH="${HOME}/.local/bin:${mise_installs}/python/latest/bin:${mise_installs}/jq/latest:${mise_installs}/bitwarden-secrets-manager/latest:${PATH}"
 
 mise install
-
-which bws
 
 
 # --- Bitwarden credential setup ---
@@ -77,3 +71,5 @@ source .venv/bin/activate
 
 echo "Install dependencies"
 pip install -r requirements.txt
+
+echo "Setup completed!"
