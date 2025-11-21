@@ -4,7 +4,7 @@
 This document provides AI coding assistants with essential context for working with the spendee-python-client project.
 
 ## Development Environment Setup
-This project uses [mise](https://mise.jdx.dev/) to manage the development environment and leverages python virtual environment by relying on the [requirements.txt](requirements.txt) file. For details how the environment set up works, look into the [setup.sh](setup.sh) file.
+This project uses [mise](https://mise.jdx.dev/) to manage the development environment and leverages python virtual environment by relying on the [requirements.txt](requirements.txt) file. For details how the environment set up works, look into the [setup.sh](setup.sh) file. Even after the setup with mise, you need to activate the python virtual environment as well.
 
 ## Secrets Management
 We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set. You can then use the `bws` CLI to fetch secrets.
