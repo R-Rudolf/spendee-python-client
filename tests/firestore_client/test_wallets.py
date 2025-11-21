@@ -18,4 +18,4 @@ def test_get_wallet_balance_invalid_date_format_raises(firestore_client, sample_
 
 
 def test_get_wallet_balance_runs_with_dates(firestore_client, sample_wallet_id):
-    assert 10000 < firestore_client.get_wallet_balance(sample_wallet_id, date="2025-08-26T23:59:59Z")
+    assert firestore_client.get_wallet_balance(sample_wallet_id, date="2025-11-17T23:59:59Z") == 88.0
