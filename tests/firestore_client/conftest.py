@@ -46,7 +46,7 @@ def sample_wallet_id(firestore_client):
         pytest.skip("No wallets available for testing")
     
     # Try to find a specific wallet ID, or use the first one
-    target_wallet_id = 'b368c5c2-68fe-4f98-9d4f-08e0cdca57a7'
+    target_wallet_id = '5668018f-2c8d-41b0-9ef9-fbaa6518891d'
     for wallet in wallets:
         if wallet['id'] == target_wallet_id:
             return target_wallet_id
@@ -80,8 +80,8 @@ def editable_transaction_id_with_wallet(firestore_client):
     Returns a tuple of (wallet_id, transaction_id) that can be used for editing.
     """
     # Specific known editable transaction
-    transaction_id = 'd2b4caa7-12eb-4c04-a744-d2bf7e02bdd2'
-    wallet_id = 'b368c5c2-68fe-4f98-9d4f-08e0cdca57a7'
+    transaction_id = 'fa08917b-9181-48df-a183-23635730bbbe'
+    wallet_id = '5668018f-2c8d-41b0-9ef9-fbaa6518891d'
     
     # Verify the transaction exists
     try:

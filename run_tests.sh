@@ -10,6 +10,9 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Activate the python virtual environment
+source .venv/bin/activate
+
 # Run pytest with appropriate options
 python -m pytest tests/ -v --tb=short
 

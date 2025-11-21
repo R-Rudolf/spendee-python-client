@@ -81,8 +81,6 @@ class SpendeeFirestore(FirebaseClient):
         self.email = access_token_data.get('email', None)
         self.user_name = access_token_data.get('name', None)
 
-        logger.info(access_token_data)
-        
         # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
         categories = self.list_categories()
