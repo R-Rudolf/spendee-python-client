@@ -42,3 +42,16 @@ Each agent file starts with a "Read the overview" links block to the relevant `d
 Each relevant `docs/**` page gets a small footer: "For implementation details, see `<path>/agents.md`".
 
 Reduce code/text duplication as much as possible across twin docs and agents files.
+
+## Guidance on development
+
+### spendee_api.py is deprecated
+
+It is left there if anytime a function would be needed from it, but all development happens on the firebase implementation, just as the core spendee developers did.
+
+### Do not modify login flow or authentication
+
+The authentication in the firebase_client.py is not intuitive, you may used to have more seamless firebase authentication, but THIS WORKS, DO NOT MODIFY. I was not able to make it work using the google.oauth2.credentials, do not try re-implementing that. Maybe because web page flow was only enabled by original authors and service owners, and python SDK based auth flow differs. Maybe because that library is intended for admin API access, not user-client access, I am not an expert in this, but did considerable trial-and-error on that front.
+
+
+If you face authorization problems, troubleshoot what identities and wallets are used, or you may experiment with new firebase centric functions, but the authentication steps in the login flow should be only modified if user approved or explicitly asked.
