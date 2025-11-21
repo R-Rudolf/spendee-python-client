@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import os
 from dotenv import load_dotenv
 from spendee import SpendeeApi
@@ -32,19 +32,22 @@ if not EMAIL or not PASSWORD:
 spendee = SpendeeFirestore(EMAIL, PASSWORD)
 
 
-print("Raiffeisen Étkezés sum in 2025.08: " + str(spendee.aggregate_transactions(
-    wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
-    start='2025-08-01T00:00:00Z',
-    end='2025-08-31T23:59:59Z',
-    filters=[{"field": "category", "op": "=", "value": "Étkezés"}],
-)))# -30000 < x < -180000
+logger.info(spendee.list_wallets())
 
-print("Raiffeisen Szigetspicc label sum in 2025.08: " + str(spendee.aggregate_transactions(
-    wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
-    start='2025-08-01T00:00:00Z',
-    end='2025-08-31T23:59:59Z',
-    filters=[{"field": "labels", "op": "array-contains", "value": "szigetspicc"}],
-))) # -50000 < x < -60000
+
+# print("Raiffeisen Étkezés sum in 2025.08: " + str(spendee.aggregate_transactions(
+#     wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
+#     start='2025-08-01T00:00:00Z',
+#     end='2025-08-31T23:59:59Z',
+#     filters=[{"field": "category", "op": "=", "value": "Étkezés"}],
+# )))# -30000 < x < -180000
+
+# print("Raiffeisen Szigetspicc label sum in 2025.08: " + str(spendee.aggregate_transactions(
+#     wallet_id='b368c5c2-68fe-4f98-9d4f-08e0cdca57a7',
+#     start='2025-08-01T00:00:00Z',
+#     end='2025-08-31T23:59:59Z',
+#     filters=[{"field": "labels", "op": "array-contains", "value": "szigetspicc"}],
+# ))) # -50000 < x < -60000
 
 
 #print(spendee._get_raw_transaction('b368c5c2-68fe-4f98-9d4f-08e0cdca57a7', 'a15d8379-6884-4e7d-a007-a1748b62e9d3', as_json=True))

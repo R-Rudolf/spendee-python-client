@@ -77,9 +77,11 @@ class SpendeeFirestore(FirebaseClient):
         self.credentials = CustomFirebaseCredentials(self)
         self.client = firestore.Client(project="spendee-app", credentials=self.credentials)
         access_token_data = self._jwt_instance.decode(self.access_token, do_verify=False)
-        self.user_id = access_token_data.get('user_id', None)
+        self.user_id = access_token_data.get('user_uuid', None)
         self.email = access_token_data.get('email', None)
         self.user_name = access_token_data.get('name', None)
+
+        logger.info(access_token_data)
         
         # Initialize mappings
         self.wallet_name_map = { x['name']: x['id'] for x in self.list_wallets()}
