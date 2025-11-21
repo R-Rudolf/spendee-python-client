@@ -1,9 +1,16 @@
+#!/usr/bin/env python3
+
 import asyncio
 import os
 
+import dotenv
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.llm.augmented_llm_openai import GoogleAugmentedLLM
+from mcp_agent.workflows.llm.augmented_llm_google import GoogleAugmentedLLM
+
+
+
+dotenv.load_dotenv()
 
 app = MCPApp(name="hello_world_agent")
 
@@ -12,7 +19,7 @@ async def example_usage():
         logger = mcp_agent_app.logger
         # This agent can read the filesystem or fetch URLs
         finder_agent = Agent(
-            name="Lumi-test",
+            name="test",
             instruction="""You are a helpful assistant""",
              #server_names=["fetch", "filesystem"], # MCP servers this Agent can use
         )

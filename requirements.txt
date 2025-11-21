@@ -16,4 +16,4 @@ pytest-asyncio
 python-dotenv
 
 # agent
-mcp-agent
+mcp-agent[google]
