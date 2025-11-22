@@ -55,3 +55,14 @@ The authentication in the firebase_client.py is not intuitive, you may used to h
 
 
 If you face authorization problems, troubleshoot what identities and wallets are used, or you may experiment with new firebase centric functions, but the authentication steps in the login flow should be only modified if user approved or explicitly asked.
+
+## Jules Agent
+
+### Session Start Checklist
+- `git pull origin main`
+- `./setup.sh`
+- `source .venv/bin/activate`
+
+### Session End Checklist
+- All tests pass without errors.
+- All learnings from the development process are documented in either the existing docs, `agents.md`, or a new `docs/session-learnings-<date>-<topic>.md` file.

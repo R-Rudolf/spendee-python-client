@@ -14,7 +14,7 @@ dotenv.load_dotenv()
 
 app = MCPApp(name="hello_world_agent")
 
-async def example_usage():
+async def example_usage(question: str):
     async with app.run() as mcp_agent_app:
         logger = mcp_agent_app.logger
         # This agent can read the filesystem or fetch URLs
@@ -32,10 +32,11 @@ async def example_usage():
 
             # This will perform a file lookup and read using the filesystem server
             result = await llm.generate_str(
-                message="Why is the sky blue? Explain in two sentences."
+                message=question
             )
             logger.info(f"Response: {result}")
+            return result
 
 
 if __name__ == "__main__":
-    asyncio.run(example_usage())
+    asyncio.run(example_usage("Why is the sky blue? Explain in two sentences."))
