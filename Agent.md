@@ -1,3 +1,7 @@
+---
+globs:
+alwaysApply: yes
+---
 # Agents Guide (Central)
 
 ## Overview

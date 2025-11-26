@@ -28,4 +28,4 @@ doc_ref.set({
 *   [Python Client Library Documentation](https://googleapis.dev/python/firestore/latest/index.html)
 
 ---
-For implementation details, see `spendee/agents.md`.
+For implementation details, see `spendee/AGENTS.md`.

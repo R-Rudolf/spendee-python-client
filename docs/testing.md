@@ -13,4 +13,4 @@ Spendee Firestore tests are located in the `tests/spendee` directory. These test
 Agent tests are located in the `agent-test` directory. These tests focus on verifying the end-to-end functionality of the agent, including its interaction with the MCP server.
 
 ---
-For implementation details, see `tests/agents.md`.
+For implementation details, see `tests/AGENTS.md`.

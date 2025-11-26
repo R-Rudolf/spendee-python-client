@@ -25,4 +25,4 @@ The `inspect2.sh` script in this repository is designed to help you run the MCP 
 For a deeper understanding of MCP, please refer to the [official documentation](https://modelcontextprotocol.io/docs/getting-started/intro).
 
 ---
-For implementation details, see `spendee/agents.md`.
+For implementation details, see `spendee/AGENTS.md`.

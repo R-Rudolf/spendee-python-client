@@ -12,4 +12,4 @@ Spendee is a personal finance application that helps users track their expenses 
 For more details on the data model, please refer to the [Firestore Schema](firestore-schema.md).
 
 ---
-For implementation details, see `spendee/agents.md`.
+For implementation details, see `spendee/AGENTS.md`.
