@@ -44,3 +44,5 @@ After that groundwork, the plan is to implement an MCP server enabling AI agent 
 ### Contributing
 
 If you can improve anything in this repo, feel free to add a pull request or add an issue!
+
+For agentic development read and follow the [agents.md](./agents.md) file.

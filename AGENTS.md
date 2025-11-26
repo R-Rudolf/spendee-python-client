@@ -66,3 +66,7 @@ If you face authorization problems, troubleshoot what identities and wallets are
 ### Session End Checklist
 - All tests pass without errors.
 - All learnings from the development process are documented in either the existing docs, `agents.md`, or a new `docs/session-learnings-<date>-<topic>.md` file.
+
+### In case of trouble
+
+When facing repeated problems, challenges, start to write a troubleshooting document detailing all steps and trials, errors you faced, with insights into why you choosed a given resolution path. Only after such document return to the user.
