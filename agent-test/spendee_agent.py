@@ -12,22 +12,22 @@ from mcp_agent.workflows.llm.augmented_llm_google import GoogleAugmentedLLM
 
 dotenv.load_dotenv()
 
-app = MCPApp(name="hello_world_agent")
-
 async def example_usage(question: str):
+    app = MCPApp(name="hello_world_agent")
     async with app.run() as mcp_agent_app:
         logger = mcp_agent_app.logger
         # This agent can read the filesystem or fetch URLs
         finder_agent = Agent(
             name="test",
             instruction="""You are a helpful assistant""",
+            server_names=["local-mcp"],
              #server_names=["fetch", "filesystem"], # MCP servers this Agent can use
         )
 
         async with finder_agent:
             # Automatically initializes the MCP servers and adds their tools for LLM use
-            #tools = await finder_agent.list_tools()
-            #logger.info(f"Tools available:", data=tools)
+            tools = await finder_agent.list_tools()
+            logger.info(f"Tools available:", data=tools)
             llm = await finder_agent.attach_llm(GoogleAugmentedLLM)
 
             # This will perform a file lookup and read using the filesystem server

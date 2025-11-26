@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 import spendee_agent
 
@@ -11,7 +12,15 @@ async def test_example_usage_with_real_llm():
     question = "Why is the sky blue? Explain in two sentences, mentioning the scientific name for the scattering effect."
 
     # Act
-    response = await spendee_agent.example_usage(question)
+    #response = await spendee_agent.example_usage(question)
+    try:
+        response = await asyncio.wait_for(
+            spendee_agent.example_usage(question),
+            timeout=30.0
+        )
+    except asyncio.TimeoutError:
+        pytest.fail("Test timed out after 30 seconds - likely due to hanging background tasks")
+
 
     # Assert
     assert response is not None, "The LLM response should not be None."
