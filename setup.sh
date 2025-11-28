@@ -94,6 +94,6 @@ echo  "Activate the python virtual environment"
 source .venv/bin/activate
 
 echo "Install dependencies"
-#pip install -r requirements.txt
+pip install -r requirements.txt
 
 echo "Setup completed!"
