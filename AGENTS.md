@@ -11,16 +11,26 @@ This document provides AI coding assistants with essential context for working w
 - Methods decorated with `@mcp_tool` are exposed to the MCP server
 - See `docs/firestore-schema.md` for Firestore schema information
 
+## Directory-Specific Guides
+- [agent-test/AGENTS.md](agent-test/AGENTS.md)
+- [docs/AGENTS.md](docs/AGENTS.md)
+- [spendee/AGENTS.md](spendee/AGENTS.md)
+- [tests/AGENTS.md](tests/AGENTS.md)
+
 ## Development Environment Setup
 This project uses [mise](https://mise.jdx.dev/) to manage the development environment and leverages python virtual environment by relying on the [requirements.txt](requirements.txt) file. For details how the environment set up works, look into the [setup.sh](setup.sh) file. Even after the setup with mise, you need to activate the python virtual environment as well.
 
 **Setup Steps:**
 
+***Non-interactive shells***
+In non-interactive shells, tools managed by `mise` (like `bws`) are not in the PATH and must be executed with the `~/.local/bin/mise x --` prefix.
+
 1. **Ensure wanted code state:**
 
 Check if you are already on a feature branch, if not change to main, then pull, to work with the latest code version.
 ```bash
-    git pull
+    git fetch --all
+    git merge origin/main
 ```
 
 2. **Run the setup script:**
@@ -42,15 +52,21 @@ The `run.py` script is used for manual testing and experimentation. You can modi
 ./run.py
 ```
 
-**Running Tests:**
-The project uses `pytest` for testing.
+**Running the MCP Server:**
+The `run-mcp.sh` script is used to run the MCP server. It activates the virtual environment and loads the environment variables from the `.env` file.
+The MCP server uses bearer token authentication. The token is sourced from the `MCP_TOKEN` environment variable and should be included in the `Authorization` header of any requests.
 ```bash
-# For spendee-firestore client testing
-.venv/bin/python -m pytest tests/ -v --tb=short
-
-# For agent based MCP testing
-.venv/bin/python -m pytest agent-test/ -v --tb=short
+./run-mcp.sh
 ```
+
+**Debugging the MCP Server:**
+The `inspect2.sh` script is used to run the MCP Inspector, a tool for debugging MCP servers. The script will clone the inspector repository and build the docker image if they don't exist.
+```bash
+./inspect2.sh
+```
+
+**Running Tests:**
+See [tests/AGENTS.md](tests/AGENTS.md) and [agent-test/AGENTS.md](agent-test/AGENTS.md) for details on running tests.
 
 **Building the MCP Server:**
 The project includes a `Dockerfile` to build the MCP server.
@@ -72,6 +88,11 @@ bws secret list | jq -r '.[] | select(.key == "spendee-password") | .value'
 ```bash
 bws secret list | jq -r '.[] | .key'
 ```
+
+***`spendee-password` secret structure***
+The `spendee-password` secret has a specific structure:
+- The password is the `value` of the secret.
+- The email is in the `note` field of the secret.
 
 ## Living Documentation
 Important: The `AGENTS.md` files are living documentation that should be updated alongside code changes.
@@ -109,6 +130,9 @@ The authentication in the firebase_client.py is not intuitive, you may used to h
 
 If you face authorization problems, troubleshoot what identities and wallets are used, or you may experiment with new firebase centric functions, but the authentication steps in the login flow should be only modified if user approved or explicitly asked.
 
+### Development Workflow
+See [spendee/AGENTS.md](spendee/AGENTS.md) for details on the development workflow.
+
 ### Logging
 
 The project uses the `logging` module. A `debug.log` file is created with debug-level logs.
@@ -116,7 +140,8 @@ The project uses the `logging` module. A `debug.log` file is created with debug-
 ## AI Agent (Google Jules, Claude code, Gemini, Openai codex, etc...)
 
 ### Session Start Checklist
-- `git pull origin main`
+- `git fetch --all`
+- `git merge origin/main`
 - `./setup.sh`
 - `source .venv/bin/activate`
 
