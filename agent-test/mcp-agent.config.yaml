@@ -4,8 +4,8 @@ google:
   api_key: "${GOOGLE_API_KEY}"
   vertexai: false
 
-mcp:
-  servers:
-    local-mcp:
-      transport: "local-mcp"
-      url: "http://localhost:8000/mcp"
+# mcp:
+#   servers:
+#     local-mcp:
+#       transport: "streamable_http"
+#       url: "http://localhost:8000/mcp"

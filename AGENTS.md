@@ -3,8 +3,64 @@
 ## Overview
 This document provides AI coding assistants with essential context for working with the spendee-python-client project.
 
+**Project Purpose:** This is a Python client for the Spendee personal finance app. The original client was based on an undocumented REST API and has been deprecated. The current implementation uses Google Firestore, which is what the Spendee web application uses. The project is evolving to include an MCP (Multi-Agent Collaboration Protocol) server, which will allow AI agents to interact with the Spendee data for tasks like smart categorization and conversational data exploration.
+
+**Core Components:**
+- `SpendeeFirestore` class in `spendee/spendee_firestore.py` - main interface for Spendee data
+- `FirebaseClient` class in `spendee/firebase_client.py` - handles authentication
+- Methods decorated with `@mcp_tool` are exposed to the MCP server
+- See `docs/firestore-schema.md` for Firestore schema information
+
 ## Development Environment Setup
 This project uses [mise](https://mise.jdx.dev/) to manage the development environment and leverages python virtual environment by relying on the [requirements.txt](requirements.txt) file. For details how the environment set up works, look into the [setup.sh](setup.sh) file. Even after the setup with mise, you need to activate the python virtual environment as well.
+
+**Setup Steps:**
+
+1. **Ensure wanted code state:**
+
+Check if you are already on a feature branch, if not change to main, then pull, to work with the latest code version.
+```bash
+git pull
+```
+
+2. **Run the setup script:**
+For agents, it populates the .env file using the bitwarden credentials available in the enrivonment.
+```bash
+   ./setup.sh
+```
+
+3. **Activate the virtual environment:**
+```bash
+   source .venv/bin/activate
+```
+
+## Running the Application
+
+**Manual Testing:**
+The `run.py` script is used for manual testing and experimentation. You can modify it to call the methods you want to test.
+```bash
+./run.py
+```
+
+**Running Tests:**
+The project uses `pytest` for testing.
+```bash
+
+# For spendee-firestore client testing
+python -m pytest tests/ -v --tb=short
+#alternatively use ./run_tests.sh
+
+# For agent based MCP testing
+python -m pytest agent-test/ -v --tb=short
+```
+
+**Building the MCP Server:**
+The project includes a `Dockerfile` to build the MCP server.
+```bash
+./build.sh
+```
+
+This will build a Docker image named `spendee-mcp` and push it to a local registry.
 
 ## Secrets Management
 We use Bitwarden for managing secrets. To access secrets, you will need the `BWS_ACCESS_TOKEN` environment variable set. You can then use the `bws` CLI to fetch secrets.
@@ -53,10 +109,13 @@ It is left there if anytime a function would be needed from it, but all developm
 
 The authentication in the firebase_client.py is not intuitive, you may used to have more seamless firebase authentication, but THIS WORKS, DO NOT MODIFY. I was not able to make it work using the google.oauth2.credentials, do not try re-implementing that. Maybe because web page flow was only enabled by original authors and service owners, and python SDK based auth flow differs. Maybe because that library is intended for admin API access, not user-client access, I am not an expert in this, but did considerable trial-and-error on that front.
 
-
 If you face authorization problems, troubleshoot what identities and wallets are used, or you may experiment with new firebase centric functions, but the authentication steps in the login flow should be only modified if user approved or explicitly asked.
 
-## Jules Agent
+### Logging
+
+The project uses the `logging` module. A `debug.log` file is created with debug-level logs.
+
+## AI Agent (Google Jules, Claude code, Gemini, Openai codex, etc...)
 
 ### Session Start Checklist
 - `git pull origin main`
