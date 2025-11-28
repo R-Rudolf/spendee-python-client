@@ -20,7 +20,7 @@ This project uses [mise](https://mise.jdx.dev/) to manage the development enviro
 
 Check if you are already on a feature branch, if not change to main, then pull, to work with the latest code version.
 ```bash
-git pull
+    git pull
 ```
 
 2. **Run the setup script:**
@@ -45,13 +45,11 @@ The `run.py` script is used for manual testing and experimentation. You can modi
 **Running Tests:**
 The project uses `pytest` for testing.
 ```bash
-
 # For spendee-firestore client testing
-python -m pytest tests/ -v --tb=short
-#alternatively use ./run_tests.sh
+.venv/bin/python -m pytest tests/ -v --tb=short
 
 # For agent based MCP testing
-python -m pytest agent-test/ -v --tb=short
+.venv/bin/python -m pytest agent-test/ -v --tb=short
 ```
 
 **Building the MCP Server:**
@@ -126,6 +124,15 @@ The project uses the `logging` module. A `debug.log` file is created with debug-
 - All tests pass without errors.
 - All learnings from the development process are documented in either the existing docs, `AGENTS.md`, or a new `docs/session-learnings-<date>-<topic>.md` file.
 
-### In case of trouble
+### Common troubleshooting steps:
+
+Use `.venv/bin/python` instead of normal python if not found.
+
+If `EMAIL` and `PASSWORD` environment variables are missing when running tests (e.g., "Failed: EMAIL and PASSWORD environment variables required"), ensure that the `.env` file exists and is sourced. The `setup.sh` script should create/update it. After running `setup.sh`, execute `source .venv/bin/activate && source .env`.
+
+If .`env` file does not exists, or contains not valid fields (made up, like example, or dummy), delete it and re-execute the `setup.sh`. Never write to it, let only setup.sh populate it.
+
+
+### In case of multiple problems
 
 When facing repeated problems, challenges, start to write a troubleshooting document detailing all steps and trials, errors you faced, with insights into why you choosed a given resolution path. Only after such document return to the user.
